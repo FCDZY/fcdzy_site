@@ -116,9 +116,18 @@ function open() {
 .meta {
   display: flex;
   align-items: center;
-  gap: 8px;
+  flex-wrap: wrap;
+  column-gap: 10px;
+  row-gap: 6px;
   font-size: 12.5px;
   color: var(--text-3);
+}
+
+/* 日期：等宽数字 + 稍宽字距，与两侧标签拉开呼吸感 */
+.date {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
 }
 
 .category {
@@ -158,23 +167,32 @@ function open() {
 
 .footer {
   margin-top: auto;
-  padding-top: 10px;
+  padding-top: 12px;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 8px;
+  gap: 14px;
   font-size: 12.5px;
   color: var(--text-3);
 }
 
 .tags {
   display: flex;
-  gap: 6px;
+  gap: 8px;
+  min-width: 0;
   overflow: hidden;
 }
 
 .tag {
   white-space: nowrap;
+}
+
+/* 阅读量：等宽数字右对齐，多位数不会左右跳动 */
+.views {
+  flex: 0 0 auto;
+  white-space: nowrap;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {

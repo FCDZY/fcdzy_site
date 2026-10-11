@@ -18,6 +18,10 @@ import type {
 } from '@/types'
 
 export interface ArticleQuery {
+  /** 页码（新参数名，与 page 等价，优先级更高） */
+  pageNum?: number
+  /** 每页条数（新参数名，与 size 等价，默认 10） */
+  pageSize?: number
   page?: number
   size?: number
   categoryId?: number | null
@@ -31,6 +35,8 @@ export const publicApi = {
   siteConfig: () => request<SiteConfig>({ url: '/public/site-config', method: 'get' }),
   articles: (params: ArticleQuery) => request<PageResult<Article>>({ url: '/public/articles', method: 'get', params }),
   recentArticles: (limit = 5) => request<Article[]>({ url: '/public/articles/recent', method: 'get', params: { limit } }),
+  /** 热门文章：后端按阅读量降序，默认最多 5 篇 */
+  hotArticles: (limit = 5) => request<Article[]>({ url: '/public/articles/hot', method: 'get', params: { limit } }),
   article: (slug: string) => request<Article>({ url: `/public/articles/${slug}`, method: 'get' }),
   categories: () => request<Category[]>({ url: '/public/categories', method: 'get' }),
   tags: () => request<Tag[]>({ url: '/public/tags', method: 'get' }),

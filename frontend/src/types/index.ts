@@ -6,6 +6,8 @@ export interface ApiResponse<T> {
 
 export interface PageResult<T> {
   list: T[]
+  /** 与 list 等价的分页别名（后端同时返回，便于按 records/total 消费） */
+  records?: T[]
   total: number
   page: number
   size: number

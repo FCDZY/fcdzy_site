@@ -79,6 +79,28 @@ const PROBE = `(() => {
     summaryText: card && card.querySelector('.summary') ? card.querySelector('.summary').textContent.trim() : '',
     tagText: card && card.querySelector('.tags') ? card.querySelector('.tags').textContent.replace(/\\s+/g, ' ').trim() : '',
     categoryText: card && card.querySelector('.category') ? card.querySelector('.category').textContent.trim() : '',
+    /* ---- 日期 / 标签 / 阅读量的排版与间距 ---- */
+    metaGap: card && card.querySelector('.meta') ? cs(card.querySelector('.meta')).columnGap : '',
+    dateTabular: card && card.querySelector('.date') ? cs(card.querySelector('.date')).fontVariantNumeric : '',
+    chipToDateGap: (() => {
+      const date = card && card.querySelector('.date')
+      if (!date) return -1
+      // 取日期前一个兄弟节点（可能是分类或置顶标签），量两者之间的真实间距
+      const prev = date.previousElementSibling
+      if (!prev) return -1
+      return Math.round(date.getBoundingClientRect().left - prev.getBoundingClientRect().right)
+    })(),
+    footerGap: card && card.querySelector('.footer') ? cs(card.querySelector('.footer')).gap : '',
+    footerPaddingTop: card && card.querySelector('.footer') ? cs(card.querySelector('.footer')).paddingTop : '',
+    tagsGap: card && card.querySelector('.tags') ? cs(card.querySelector('.tags')).gap : '',
+    tagToViewsGap: (() => {
+      const tags = card && card.querySelector('.tags')
+      const views = card && card.querySelector('.views')
+      if (!tags || !views) return -1
+      return Math.round(views.getBoundingClientRect().left - tags.getBoundingClientRect().right)
+    })(),
+    viewsTabular: card && card.querySelector('.views') ? cs(card.querySelector('.views')).fontVariantNumeric : '',
+    viewsTextAlign: card && card.querySelector('.views') ? cs(card.querySelector('.views')).textAlign : '',
     running: card ? card.getAnimations().map((a) => ({
       prop: a.transitionProperty,
       duration: a.effect.getTiming().duration,
@@ -263,6 +285,14 @@ function alphaOf(shadow) {
     check('标题文字与接口一致', before.titleText === first.title, before.titleText)
     check('摘要文字与接口一致', !first.summary || before.summaryText.startsWith(first.summary.slice(0, 20)), before.summaryText.slice(0, 40))
     check('分类 / 标签仍在渲染', before.categoryText.length > 0 && before.tagText.length > 0, `${before.categoryText} | ${before.tagText}`)
+
+    console.log('\n【排版】日期 / 标签 / 阅读量间距微调')
+    check('日期与分类之间留出间距', before.chipToDateGap >= 8 && before.chipToDateGap <= 14, `${before.chipToDateGap}px（meta column-gap=${before.metaGap}）`)
+    check('标签与阅读量之间留出间距', before.tagToViewsGap >= 12, `${before.tagToViewsGap}px（footer gap=${before.footerGap}）`)
+    check('标签之间间距统一', before.tagsGap === '8px', before.tagsGap)
+    check('正文与底部信息栏留白', before.footerPaddingTop === '12px', before.footerPaddingTop)
+    check('日期使用等宽数字', before.dateTabular.includes('tabular-nums'), before.dateTabular)
+    check('阅读量等宽且右对齐', before.viewsTabular.includes('tabular-nums') && before.viewsTextAlign === 'right', `${before.viewsTabular} / ${before.viewsTextAlign}`)
 
     console.log(failures === 0 ? '\n文章卡片 hover 检查全部通过 ✅' : `\n共有 ${failures} 项未通过 ❌`)
     if (shotPrefix) console.log(`截图：${shotPrefix}-before.png / ${shotPrefix}-hover.png`)

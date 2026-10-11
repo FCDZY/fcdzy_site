@@ -5,7 +5,7 @@ import { publicApi } from '@/api'
 import type { Article } from '@/types'
 import { useSiteStore } from '@/stores/site'
 import { useSeo } from '@/composables/useSeo'
-import { formatDate } from '@/utils/format'
+import { formatDate, formatNumber } from '@/utils/format'
 import ArticleCard from '@/components/ArticleCard.vue'
 import AppPagination from '@/components/AppPagination.vue'
 import SiteHeader from '@/components/SiteHeader.vue'
@@ -13,7 +13,8 @@ import SiteHeader from '@/components/SiteHeader.vue'
 const site = useSiteStore()
 const router = useRouter()
 
-const PAGE_SIZE = 8
+const PAGE_SIZE = 10
+const HOT_SIZE = 5
 
 const listRef = ref<HTMLElement | null>(null)
 const articles = ref<Article[]>([])
@@ -21,6 +22,10 @@ const total = ref(0)
 const page = ref(1)
 const loading = ref(false)
 const error = ref('')
+
+/** 侧边栏热门文章（后端按阅读量降序，最多 5 篇） */
+const hotArticles = ref<Article[]>([])
+const hotLoading = ref(false)
 
 const bannerTitle = computed(() => site.config.homeBannerTitle || site.siteName)
 const bannerSubtitle = computed(() => site.config.homeBannerSubtitle || site.siteSubtitle)
@@ -40,9 +45,10 @@ async function loadArticles() {
   loading.value = true
   error.value = ''
   try {
-    const result = await publicApi.articles({ page: page.value, size: PAGE_SIZE })
-    articles.value = result.list
-    total.value = result.total
+    // 分页参数使用 pageNum / pageSize，后端返回 records（=list）与 total
+    const result = await publicApi.articles({ pageNum: page.value, pageSize: PAGE_SIZE })
+    articles.value = result.records ?? result.list ?? []
+    total.value = result.total ?? 0
   } catch {
     articles.value = []
     total.value = 0
@@ -56,6 +62,17 @@ function scrollToList() {
   const el = listRef.value
   if (el && typeof el.scrollIntoView === 'function') {
     el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+}
+
+async function loadHot() {
+  hotLoading.value = true
+  try {
+    hotArticles.value = await publicApi.hotArticles(HOT_SIZE)
+  } catch {
+    hotArticles.value = []
+  } finally {
+    hotLoading.value = false
   }
 }
 
@@ -81,7 +98,10 @@ watch(
   { immediate: true }
 )
 
-onMounted(loadArticles)
+onMounted(() => {
+  loadArticles()
+  loadHot()
+})
 </script>
 
 <template>
@@ -186,6 +206,21 @@ onMounted(loadArticles)
                 </li>
               </ul>
               <p v-else class="side-empty">暂无专题</p>
+            </section>
+
+            <section class="card side-card hot-card">
+              <h3 class="side-title">热门文章</h3>
+              <el-skeleton v-if="hotLoading" :rows="3" animated />
+              <ol v-else-if="hotArticles.length" class="hot-list">
+                <li v-for="(item, index) in hotArticles" :key="item.id" class="hot-item">
+                  <router-link class="hot-link" :to="`/article/${item.slug}`">
+                    <span class="hot-rank" :class="{ 'is-top': index < 3 }">{{ index + 1 }}</span>
+                    <span class="hot-title">{{ item.title }}</span>
+                    <span class="hot-views">{{ formatNumber(item.viewCount) }}</span>
+                  </router-link>
+                </li>
+              </ol>
+              <p v-else class="side-empty">暂无热门文章</p>
             </section>
           </aside>
         </div>
@@ -541,6 +576,80 @@ onMounted(loadArticles)
   margin: 0;
   font-size: 13px;
   color: var(--text-3);
+}
+
+/* ===== 热门文章（侧边栏，样式跟随全局主题） ===== */
+.hot-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.hot-item + .hot-item {
+  margin-top: 2px;
+}
+
+.hot-link {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: 8px;
+  transition: background-color 0.16s ease;
+}
+
+.hot-link:hover {
+  background: var(--surface-hover);
+}
+
+/* 序号：高度与标题首行行框（14px × 1.5 = 21px）对齐，数字等宽 */
+.hot-rank {
+  flex: 0 0 21px;
+  width: 21px;
+  height: 21px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  color: var(--text-3);
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 21px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.hot-rank.is-top {
+  background: var(--brand);
+  color: #fff;
+}
+
+.hot-title {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-2);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  transition: color 0.16s ease;
+}
+
+.hot-link:hover .hot-title {
+  color: var(--brand-dark);
+}
+
+/* 阅读数：与序号同一行框基线，右对齐 + 等宽数字，位数变化不挤压标题 */
+.hot-views {
+  flex: 0 0 auto;
+  min-width: 26px;
+  text-align: right;
+  font-size: 12px;
+  line-height: 21px;
+  color: var(--text-3);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (prefers-reduced-motion: reduce) {

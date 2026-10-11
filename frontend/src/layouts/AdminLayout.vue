@@ -5,6 +5,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteStore } from '@/stores/site'
 import { useTheme } from '@/composables/useTheme'
+import BackToTop from '@/components/BackToTop.vue'
 
 const auth = useAuthStore()
 const site = useSiteStore()
@@ -104,6 +105,8 @@ async function handleLogout() {
         <router-view />
       </el-main>
     </el-container>
+
+    <BackToTop />
   </el-container>
 </template>
 

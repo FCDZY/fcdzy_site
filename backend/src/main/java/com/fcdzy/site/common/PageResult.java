@@ -41,6 +41,13 @@ public class PageResult<T> {
         return list;
     }
 
+    /**
+     * 与 list 等价的分页别名，便于按 MyBatis / PageHelper 风格的 records + total 消费。
+     */
+    public List<T> getRecords() {
+        return list;
+    }
+
     public void setList(List<T> list) {
         this.list = list;
     }

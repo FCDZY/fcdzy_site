@@ -51,18 +51,33 @@ public class PublicController {
         return ApiResponse.ok(siteConfigService.getConfig());
     }
 
+    /**
+     * 文章分页列表。
+     * 支持两套参数名：pageNum/pageSize（默认 1 / 10）与历史参数 page/size，二者等价。
+     * 返回 PageResult，其中 records（=list）为当前页文章，total 为总条数。
+     */
     @GetMapping("/articles")
-    public ApiResponse<PageResult<ArticleDto>> articles(@RequestParam(defaultValue = "1") int page,
+    public ApiResponse<PageResult<ArticleDto>> articles(@RequestParam(required = false) Integer pageNum,
+                                                        @RequestParam(required = false) Integer pageSize,
+                                                        @RequestParam(defaultValue = "1") int page,
                                                         @RequestParam(defaultValue = "10") int size,
                                                         @RequestParam(required = false) Long categoryId,
                                                         @RequestParam(required = false) Long tagId,
                                                         @RequestParam(required = false) String keyword) {
-        return ApiResponse.ok(articleService.publicList(page, size, categoryId, tagId, keyword));
+        int targetPage = pageNum != null ? pageNum : page;
+        int targetSize = pageSize != null ? pageSize : size;
+        return ApiResponse.ok(articleService.publicList(targetPage, targetSize, categoryId, tagId, keyword));
     }
 
     @GetMapping("/articles/recent")
     public ApiResponse<List<ArticleDto>> recent(@RequestParam(defaultValue = "5") int limit) {
         return ApiResponse.ok(articleService.publicRecent(limit));
+    }
+
+    /** 热门文章：按阅读量降序，默认最多 5 篇 */
+    @GetMapping("/articles/hot")
+    public ApiResponse<List<ArticleDto>> hot(@RequestParam(defaultValue = "5") int limit) {
+        return ApiResponse.ok(articleService.publicHot(limit));
     }
 
     @GetMapping("/articles/{slug}")

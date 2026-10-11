@@ -232,7 +232,7 @@ const PROBE = `(() => {
     console.log('\n【需求 5】Hero 下方文章列表与侧边栏保持浅白底、无背景图')
     check('内容区未叠加背景图', m.bodyBgImage === 'none', m.bodyBgImage)
     check('文章列表渲染', m.articleCardCount > 0, `${m.articleCardCount} 张卡片`)
-    check('侧边栏渲染', m.sideCardCount === 3, `${m.sideCardCount} 张侧栏卡片`)
+    check('侧边栏渲染', m.sideCardCount === 4, `${m.sideCardCount} 张侧栏卡片（分类/标签/专题/热门文章）`)
 
     console.log('\n【移动端】<=768px 适配')
     await setViewport(390, 844)

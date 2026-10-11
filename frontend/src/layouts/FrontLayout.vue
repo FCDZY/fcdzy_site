@@ -3,6 +3,7 @@ import { computed } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSiteStore } from '@/stores/site'
 import SiteHeader from '@/components/SiteHeader.vue'
+import BackToTop from '@/components/BackToTop.vue'
 
 const site = useSiteStore()
 const route = useRoute()
@@ -33,7 +34,7 @@ const showHeader = computed(() => route.name !== 'home')
       </div>
     </footer>
 
-    <el-backtop :right="20" :bottom="30" />
+    <BackToTop />
   </div>
 </template>
 

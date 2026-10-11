@@ -113,6 +113,9 @@ npm run smoke:render     # 无头 Chrome 渲染前台各页面并校验内容
 npm run smoke:hero       # 校验首页 Hero（45vh/遮罩/呼吸动画/渐变/白字，内页不受影响）
 npm run smoke:card       # 派发真实鼠标事件校验文章卡片 hover（上浮 4px / 阴影加深 / 过渡 / 缩略图位）
 npm run smoke:dark       # 校验深色模式（浅色基线 / 切换过渡 / 持久化 / Hero 遮罩 0.5 / 代码块暗色 + 行号 + 复制）
+npm run smoke:hot        # 校验首页侧边栏热门文章（位置 / 阅读量降序 / 最多 5 篇 / 点击跳转 / 主题适配）
+npm run smoke:backtop    # 校验全局回到顶部按钮（300px 阈值 / 平滑滚动 / 主题适配 / 前台与后台）
+npm run smoke:pagination # 校验首页文章分页（每页 10 条 / 总条数 / 边界禁用 / 翻页请求 / 主题适配）
 npm run smoke:admin      # 无头 Chrome 完成登录并校验后台各页面（含控制台报错检测）
 ```
 
@@ -133,12 +136,13 @@ npm run smoke:admin      # 无头 Chrome 完成登录并校验后台各页面（
 ### 前台
 - 深色 / 浅色主题：导航栏一键切换（偏好存 `localStorage`，刷新保持），切换时全局颜色 0.3s 平滑过渡；浅色取值与原样式完全一致
 - 首页 Hero：高度 45vh 占据页面顶部，导航栏置于 Hero 内部最上方；背景读取后台配置的图片（未配置时用默认深蓝渐变），叠加黑色半透明遮罩（浅色 0.45 / 深色 0.5），背景 25 秒一次呼吸缩放（最大 1.04 倍，后台可开关）；文字白色、按钮 hover 上浮；底部 120px 渐变（透明 → 页面底色）与下方内容区无缝衔接
-- 首页：最新文章、分类/标签/专题侧栏（不叠加背景图）
+- 首页：最新文章、分类 / 标签 / 专题 / 热门文章侧栏（不叠加背景图）；热门文章由 `/api/public/articles/hot` 按阅读量降序返回，最多 5 篇，点击标题进入详情，前三名序号高亮
 - 文章卡片（首页与文章列表共用）：默认柔和浅阴影，hover 时 `translateY(-4px)` 上浮 + 阴影扩大加深，`0.28s cubic-bezier` 平滑过渡；左侧预留缩略图位（`.card-media`），无图时不占空间、有封面时自动显示，后续接入缩略图字段无需改布局
-- 文章列表：分页、关键词搜索、按分类/标签筛选
+- 文章列表：分页（每页 10 条，支持 `pageNum` / `pageSize`）、关键词搜索、按分类/标签筛选
 - 文章详情：Markdown 渲染、代码高亮（浅色 GitHub Light / 深色 GitHub Dark）、语言标签、行号、一键复制、目录、上一篇/下一篇、所属专题（不使用 Hero 大图）
 - 分类页、标签页、专题列表与专题详情（按后台自定义顺序展示 + 吸顶导航）
 - 关于页（站点与作者信息来自后台配置）
+- 全局回到顶部按钮（前台 + 后台）：滚动超过 300px 淡入显示，点击平滑滚回顶部，配色跟随深浅主题
 - 移动端适配、基础 SEO（动态 title/description/keywords/OG、sitemap.xml、robots.txt）
 
 ### 后台
@@ -163,8 +167,9 @@ npm run smoke:admin      # 无头 Chrome 完成登录并校验后台各页面（
 | PUT | /api/auth/password | 修改密码 |
 | PUT | /api/auth/profile | 修改昵称/头像/邮箱 |
 | GET | /api/public/site-config | 站点配置 |
-| GET | /api/public/articles | 文章列表（page/size/categoryId/tagId/keyword） |
+| GET | /api/public/articles | 文章分页列表（pageNum/pageSize，默认 1/10；也兼容 page/size；返回 records + total + list） |
 | GET | /api/public/articles/{slug} | 文章详情（浏览量 +1） |
+| GET | /api/public/articles/hot?limit=5 | 热门文章（按阅读量降序，默认 5 篇） |
 | GET | /api/public/categories\|tags\|topics | 分类/标签/专题 |
 | GET | /api/public/topics/{slug} | 专题详情（含按顺序的文章） |
 | GET/POST/PUT/DELETE | /api/admin/articles/** | 文章管理 |
@@ -180,4 +185,5 @@ npm run smoke:admin      # 无头 Chrome 完成登录并校验后台各页面（
 - 文章搜索只匹配标题与摘要，未接入全文索引。
 - 图片存在本地磁盘，换机器需要一并拷贝 `backend/uploads`；生产建议接对象存储。
 - 单管理员模式，没有多用户与角色权限。
+- **分页说明**：本项目持久层是 Spring Data JPA / Hibernate，`PageRequest` 已把分页下推到数据库（`LIMIT/OFFSET` + `COUNT`），效果与 PageHelper 的 `startPage` 等价。PageHelper 是 MyBatis 插件（依赖 `SqlSessionFactory`），无法拦截 JPA 查询，因此未引入；接口按 `pageNum` / `pageSize` → `records` / `total` 的 MyBatis 风格契约提供，日后若迁移到 MyBatis-Plus，前端无需改动。
 - Element Plus 目前是全量引入（首屏 gzip 约 400KB），追求极致体积可接入 `unplugin-vue-components` 按需引入。

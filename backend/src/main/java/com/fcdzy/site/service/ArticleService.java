@@ -62,6 +62,11 @@ public class ArticleService {
 
     // ==================== 前台接口 ====================
 
+    /**
+     * 文章分页查询（前台）。
+     * JPA 的 PageRequest 会把分页下推到数据库（LIMIT/OFFSET + COUNT），
+     * 与 PageHelper 的 startPage 作用等价；页码从 1 开始，size 上限 50、默认 10。
+     */
     @Transactional(readOnly = true)
     public PageResult<ArticleDto> publicList(int page, int size, Long categoryId, Long tagId, String keyword) {
         Pageable pageable = PageRequest.of(pageIndex(page), clampSize(size),
@@ -75,6 +80,16 @@ public class ArticleService {
         int size = Math.min(Math.max(limit, 1), 20);
         Pageable pageable = PageRequest.of(0, size,
                 Sort.by(Sort.Order.desc("publishedAt"), Sort.Order.desc("id")));
+        Page<Article> result = articleRepository.findAll(spec(Article.Status.PUBLISHED, null, null, null), pageable);
+        return result.getContent().stream().map(a -> ArticleDto.of(a, false)).toList();
+    }
+
+    /** 热门文章：仅已发布，按阅读量降序，数量上限 5（可在调用处调整，最多 20） */
+    @Transactional(readOnly = true)
+    public List<ArticleDto> publicHot(int limit) {
+        int size = Math.min(Math.max(limit, 1), 20);
+        Pageable pageable = PageRequest.of(0, size, Sort.by(
+                Sort.Order.desc("viewCount"), Sort.Order.desc("publishedAt"), Sort.Order.desc("id")));
         Page<Article> result = articleRepository.findAll(spec(Article.Status.PUBLISHED, null, null, null), pageable);
         return result.getContent().stream().map(a -> ArticleDto.of(a, false)).toList();
     }
