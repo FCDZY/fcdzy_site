@@ -1,0 +1,23 @@
+# 后端
+backend/target/
+backend/uploads/
+*.jar
+*.war
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+pnpm-debug.log*
+
+# IDE / 系统
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+logs/

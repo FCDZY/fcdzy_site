@@ -1,0 +1,36 @@
+{
+  "name": "fcdzy-site-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "build:only": "vite build",
+    "preview": "vite preview",
+    "typecheck": "vue-tsc --noEmit",
+    "check:components": "node scripts/check-components.cjs",
+    "smoke:render": "node scripts/smoke-render.cjs",
+    "smoke:admin": "node scripts/smoke-admin.cjs"
+  },
+  "dependencies": {
+    "@element-plus/icons-vue": "^2.3.1",
+    "axios": "^1.7.9",
+    "dompurify": "^3.2.4",
+    "element-plus": "^2.9.5",
+    "highlight.js": "^11.11.1",
+    "markdown-it": "^14.1.0",
+    "md-editor-v3": "^5.4.1",
+    "pinia": "^2.3.1",
+    "vue": "^3.5.13",
+    "vue-router": "^4.5.0"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^26.6.5",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "~5.7.3",
+    "vite": "^6.0.11",
+    "vue-tsc": "^2.2.0"
+  }
+}

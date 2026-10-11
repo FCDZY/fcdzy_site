@@ -1,0 +1,51 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: fcdzy-site
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://localhost:3306/fcdzy_site?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: root
+    password: "123456"
+  jpa:
+    hibernate:
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+  jackson:
+    time-zone: Asia/Shanghai
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+  web:
+    resources:
+      add-mappings: true
+
+site:
+  # 上传文件保存目录（相对启动目录，也可写绝对路径）
+  upload-dir: ./uploads
+  # 对外访问地址，用于拼接图片完整地址 / sitemap
+  base-url: http://localhost:8080
+  # 前台站点地址，用于 sitemap 中的页面链接
+  web-url: http://localhost:5173
+  jwt:
+    # HS256 要求密钥长度不少于 32 字节
+    secret: fcdzy-site-jwt-secret-key-please-change-in-production-2024
+    expire-hours: 24
+  admin:
+    # 首次启动时自动创建的管理员账号（已存在则不会覆盖）
+    username: admin
+    password: admin123
+    nickname: 站长
+
+logging:
+  level:
+    root: info
+    com.fcdzy.site: info
+    org.hibernate.SQL: warn
