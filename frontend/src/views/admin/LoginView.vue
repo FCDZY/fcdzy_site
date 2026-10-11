@@ -97,7 +97,7 @@ async function handleSubmit() {
   width: 100%;
   max-width: 400px;
   padding: 32px 28px 20px;
-  background: #fff;
+  background: var(--card);
   border-radius: 16px;
   box-shadow: 0 18px 50px rgba(15, 23, 42, 0.25);
 }

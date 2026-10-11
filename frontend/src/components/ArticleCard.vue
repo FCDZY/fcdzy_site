@@ -5,13 +5,21 @@ import type { Article } from '@/types'
 import { formatDate, formatNumber } from '@/utils/format'
 import { plainText } from '@/utils/text'
 
-const props = defineProps<{
-  article: Article
-  showCover?: boolean
-}>()
+const props = withDefaults(
+  defineProps<{
+    article: Article
+    /** 是否启用左侧缩略图位（预留） */
+    showCover?: boolean
+    /** 预留：自定义缩略图地址；不传时使用文章封面（后台可设置，也会自动取正文首图） */
+    thumb?: string
+  }>(),
+  { showCover: true, thumb: '' }
+)
 
 const router = useRouter()
 
+/** 左侧缩略图地址；为空时该位置不占空间，保持原有纯文字布局 */
+const thumbUrl = computed(() => (props.showCover ? props.thumb || props.article.coverImage || '' : ''))
 const summary = computed(() => props.article.summary || plainText(props.article.content, 110))
 
 function open() {
@@ -21,9 +29,14 @@ function open() {
 
 <template>
   <article class="article-card card" @click="open">
-    <div v-if="showCover !== false && article.coverImage" class="cover">
-      <img :src="article.coverImage" :alt="article.title" loading="lazy" />
+    <!--
+      左侧缩略图位（预留）：结构常驻，无图时 display:none 不占空间，
+      后续给 article.coverImage 或 thumb 传值即可自动生效，无需改动布局。
+    -->
+    <div class="card-media" :class="{ 'is-empty': !thumbUrl }">
+      <img v-if="thumbUrl" :src="thumbUrl" :alt="article.title" loading="lazy" />
     </div>
+
     <div class="body">
       <div class="meta">
         <span v-if="article.category" class="category">{{ article.category.name }}</span>
@@ -44,35 +57,52 @@ function open() {
 
 <style scoped>
 .article-card {
+  position: relative;
   display: flex;
   gap: 16px;
   padding: 16px;
   margin-bottom: 14px;
   cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease;
+  /* 默认：柔和浅阴影 */
+  box-shadow: var(--card-shadow);
+  /* 悬浮过渡：位移动画平滑不突兀 */
+  transition: transform 0.28s cubic-bezier(0.22, 0.61, 0.36, 1),
+    box-shadow 0.28s cubic-bezier(0.22, 0.61, 0.36, 1), border-color 0.28s ease;
+  will-change: transform, box-shadow;
 }
 
 .article-card:hover {
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-md);
+  /* 上浮 4px + 阴影扩大加深 */
+  transform: translateY(-4px);
+  box-shadow: var(--card-shadow-hover);
+  border-color: var(--card-hover-border);
+  z-index: 1;
 }
 
-.cover {
+/* ===== 左侧缩略图位（预留） ===== */
+.card-media {
   flex: 0 0 180px;
+  width: 180px;
   height: 116px;
   overflow: hidden;
   border-radius: 8px;
-  background: #eef1f5;
+  background: var(--media-bg);
 }
 
-.cover img {
+/* 无图时不占空间，卡片保持原有全文布局 */
+.card-media.is-empty {
+  display: none;
+}
+
+.card-media img {
   width: 100%;
   height: 100%;
   object-fit: cover;
-  transition: transform 0.3s ease;
+  display: block;
+  transition: transform 0.35s ease;
 }
 
-.article-card:hover .cover img {
+.article-card:hover .card-media img {
   transform: scale(1.04);
 }
 
@@ -93,14 +123,14 @@ function open() {
 
 .category {
   color: var(--brand-dark);
-  background: #eff6ff;
+  background: var(--brand-soft);
   padding: 1px 8px;
   border-radius: 999px;
 }
 
 .topped {
-  color: #b45309;
-  background: #fef3c7;
+  color: var(--warn-text);
+  background: var(--warn-soft);
   padding: 1px 8px;
   border-radius: 999px;
 }
@@ -147,14 +177,29 @@ function open() {
   white-space: nowrap;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  .article-card {
+    transition: box-shadow 0.2s ease, border-color 0.2s ease;
+  }
+
+  .article-card:hover {
+    transform: none;
+  }
+}
+
 @media (max-width: 640px) {
   .article-card {
     gap: 12px;
     padding: 12px;
   }
 
-  .cover {
+  .article-card:hover {
+    transform: translateY(-2px);
+  }
+
+  .card-media {
     flex: 0 0 104px;
+    width: 104px;
     height: 78px;
   }
 

@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRoute } from 'vue-router'
 import { useSiteStore } from '@/stores/site'
+import { useTheme } from '@/composables/useTheme'
 
 /**
  * 站点导航栏。
@@ -12,6 +13,7 @@ withDefaults(defineProps<{ transparent?: boolean }>(), { transparent: false })
 
 const site = useSiteStore()
 const route = useRoute()
+const { isDark, toggleTheme } = useTheme()
 const drawer = ref(false)
 
 const navs = [
@@ -46,9 +48,21 @@ const isActive = (to: string) => {
         </router-link>
       </nav>
 
-      <button class="hamburger" type="button" aria-label="菜单" @click="drawer = true">
-        <el-icon :size="20"><Menu /></el-icon>
-      </button>
+      <div class="header-actions">
+        <button
+          class="theme-toggle"
+          type="button"
+          :aria-label="isDark ? '切换到浅色模式' : '切换到深色模式'"
+          :title="isDark ? '切换到浅色模式' : '切换到深色模式'"
+          @click="toggleTheme"
+        >
+          <el-icon :size="18"><Sunny v-if="isDark" /><Moon v-else /></el-icon>
+        </button>
+
+        <button class="hamburger" type="button" aria-label="菜单" @click="drawer = true">
+          <el-icon :size="20"><Menu /></el-icon>
+        </button>
+      </div>
     </div>
   </header>
 
@@ -80,9 +94,10 @@ const isActive = (to: string) => {
 .site-header.is-solid {
   position: sticky;
   top: 0;
-  background: rgba(255, 255, 255, 0.92);
+  background: var(--header-bg);
   backdrop-filter: saturate(180%) blur(12px);
   border-bottom: 1px solid var(--border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 /* 首页：叠在 Hero 顶部，透明、白字 */
@@ -169,7 +184,7 @@ const isActive = (to: string) => {
 
 .nav a:hover {
   color: var(--brand-dark);
-  background: #f2f6ff;
+  background: var(--brand-soft-2);
 }
 
 .nav a.active {
@@ -177,17 +192,35 @@ const isActive = (to: string) => {
   background: var(--brand);
 }
 
+.header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.theme-toggle,
 .hamburger {
-  display: none;
+  display: flex;
   align-items: center;
   justify-content: center;
   width: 38px;
   height: 38px;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--card);
   border-radius: 10px;
   color: var(--text-1);
   cursor: pointer;
+  transition: background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.theme-toggle:hover,
+.hamburger:hover {
+  color: var(--brand-dark);
+  border-color: var(--chip-border-hover);
+}
+
+.hamburger {
+  display: none;
 }
 
 /* ===== 透明变体：白色文字 ===== */
@@ -213,9 +246,16 @@ const isActive = (to: string) => {
   background: rgba(255, 255, 255, 0.24);
 }
 
-.is-transparent .hamburger {
+.is-transparent .hamburger,
+.is-transparent .theme-toggle {
   border-color: rgba(255, 255, 255, 0.45);
   background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.is-transparent .theme-toggle:hover,
+.is-transparent .hamburger:hover {
+  background: rgba(255, 255, 255, 0.22);
   color: #fff;
 }
 
@@ -239,7 +279,7 @@ const isActive = (to: string) => {
 }
 
 .drawer-link.active {
-  background: #eff6ff;
+  background: var(--brand-soft);
   color: var(--brand-dark);
   font-weight: 600;
 }

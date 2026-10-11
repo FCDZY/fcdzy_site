@@ -43,10 +43,19 @@ async function waitForDevtools() {
 }
 
 let failures = 0
-function check(label, ok) {
-  console.log(`  ${ok ? '[OK]  ' : '[MISS]'} ${label}`)
+function check(label, ok, detail = '') {
+  console.log(`  ${ok ? '[OK]  ' : '[MISS]'} ${label}${detail ? `  → ${detail}` : ''}`)
   if (!ok) failures++
 }
+
+/** 判断颜色是否为深色底（Element Plus 深色变量与自定义 token 取值不同，按亮度判定更稳） */
+function brightness(value) {
+  const m = /rgba?\((\d+),\s*(\d+),\s*(\d+)/.exec(value || '')
+  if (!m) return -1
+  return (Number(m[1]) + Number(m[2]) + Number(m[3])) / 3
+}
+const isDarkColor = (v) => brightness(v) >= 0 && brightness(v) < 70
+const isLightColor = (v) => brightness(v) > 150
 
 ;(async () => {
   const profile = path.join(os.tmpdir(), 'dsh-smoke-admin-profile')
@@ -157,6 +166,29 @@ function check(label, ok) {
       await fetch(`${API}/api/admin/topics/1`, { headers: { Authorization: `Bearer ${token}` } })
     ).json()
 
+    // 可选：以深色模式跑一遍后台（SMOKE_THEME=dark）
+    const darkMode = process.env.SMOKE_THEME === 'dark'
+    if (darkMode) {
+      await evaluate("localStorage.setItem('fcdzy_theme', 'dark')")
+      await navigate(`${BASE}/admin/login`, pageReady)
+      console.log('\n深色模式后台（SMOKE_THEME=dark）')
+      const probe = `JSON.stringify({
+        isDark: document.documentElement.classList.contains('dark'),
+        bodyBg: getComputedStyle(document.body).backgroundColor,
+        asideBg: getComputedStyle(document.querySelector('.aside')).backgroundColor,
+        headerBg: getComputedStyle(document.querySelector('.header')).backgroundColor,
+        cardBg: (() => { const c = document.querySelector('.el-card'); return c ? getComputedStyle(c).backgroundColor : '' })()
+      })`
+      const loginDark = JSON.parse(await evaluate(probe))
+      check('html.dark 生效', loginDark.isDark)
+      check('页面底色为深色', loginDark.bodyBg === 'rgb(15, 17, 21)', loginDark.bodyBg)
+      check('登录卡片为深色面板', isDarkColor(loginDark.cardBg), loginDark.cardBg)
+      if (process.env.SMOKE_SHOT) {
+        const shot = await send('Page.captureScreenshot', { format: 'png' })
+        if (shot.result?.data) fs.writeFileSync(`${process.env.SMOKE_SHOT}-admin-login.png`, Buffer.from(shot.result.data, 'base64'))
+      }
+    }
+
     // 3) 仪表盘
     await navigate(`${BASE}/admin`, pageReady)
     let dom = await html()
@@ -166,6 +198,32 @@ function check(label, ok) {
     check('最近更新表格有条目', hasText(dom, articles.data.list[0].title))
     check('无控制台报错', consoleErrors.length === 0)
     if (consoleErrors.length) console.log('    错误:', consoleErrors.slice(0, 3))
+
+    if (darkMode) {
+      const dashDark = JSON.parse(
+        await evaluate(
+          `JSON.stringify({
+            isDark: document.documentElement.classList.contains('dark'),
+            asideBg: getComputedStyle(document.querySelector('.aside')).backgroundColor,
+            headerBg: getComputedStyle(document.querySelector('.header')).backgroundColor,
+            cardBg: (() => { const c = document.querySelector('.el-card'); return c ? getComputedStyle(c).backgroundColor : '' })(),
+            tableBg: (() => { const t = document.querySelector('.el-table'); return t ? getComputedStyle(t).backgroundColor : '' })(),
+            menuText: (() => { const m = document.querySelector('.el-menu-item'); return m ? getComputedStyle(m).color : '' })()
+          })`
+        )
+      )
+      console.log('  深色仪表盘计算样式')
+      check('侧边栏为深色', isDarkColor(dashDark.asideBg), dashDark.asideBg)
+      check('顶栏为深色面板', isDarkColor(dashDark.headerBg), dashDark.headerBg)
+      check('统计卡片为深色', isDarkColor(dashDark.cardBg), dashDark.cardBg)
+      check('表格同步深色', isDarkColor(dashDark.tableBg), dashDark.tableBg)
+      check('菜单文字为浅色', isLightColor(dashDark.menuText), dashDark.menuText)
+      if (process.env.SMOKE_SHOT) {
+        await navigate(`${BASE}/admin`, pageReady)
+        const shot = await send('Page.captureScreenshot', { format: 'png' })
+        if (shot.result?.data) fs.writeFileSync(`${process.env.SMOKE_SHOT}-admin-dashboard.png`, Buffer.from(shot.result.data, 'base64'))
+      }
+    }
 
     // 4) 文章管理
     await navigate(`${BASE}/admin/articles`, pageReady)

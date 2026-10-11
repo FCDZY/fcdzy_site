@@ -273,7 +273,7 @@ onMounted(async () => {
   gap: 10px;
   margin-top: 8px;
   padding: 12px 4px;
-  background: #fff;
+  background: var(--card);
   border-top: 1px solid var(--border);
 }
 

@@ -12,6 +12,8 @@
     "check:components": "node scripts/check-components.cjs",
     "smoke:render": "node scripts/smoke-render.cjs",
     "smoke:hero": "node scripts/smoke-hero.cjs",
+    "smoke:card": "node scripts/smoke-card.cjs",
+    "smoke:dark": "node scripts/smoke-dark.cjs",
     "smoke:admin": "node scripts/smoke-admin.cjs"
   },
   "dependencies": {

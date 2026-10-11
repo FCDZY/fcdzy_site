@@ -141,7 +141,7 @@ watch(
   flex: 0 0 180px;
   object-fit: cover;
   border-radius: 10px;
-  background: #eef1f5;
+  background: var(--media-bg);
 }
 
 .head-body {
@@ -181,11 +181,11 @@ watch(
 }
 
 .row + .row {
-  border-top: 1px solid #f1f3f5;
+  border-top: 1px solid var(--border);
 }
 
 .row:hover {
-  background: #f7f9fc;
+  background: var(--surface-hover);
 }
 
 .row:hover .row-title {
@@ -197,7 +197,7 @@ watch(
   width: 26px;
   height: 26px;
   border-radius: 8px;
-  background: #eff6ff;
+  background: var(--brand-soft);
   color: var(--brand-dark);
   font-size: 13px;
   font-weight: 700;

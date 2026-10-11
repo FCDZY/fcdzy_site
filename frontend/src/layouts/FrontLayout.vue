@@ -50,11 +50,12 @@ const showHeader = computed(() => route.name !== 'home')
 
 .site-footer {
   border-top: 1px solid var(--border);
-  background: #fff;
+  background: var(--footer-bg);
   padding: 22px 0 26px;
   text-align: center;
   color: var(--text-3);
   font-size: 13px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .site-footer p {

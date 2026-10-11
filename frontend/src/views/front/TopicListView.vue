@@ -76,7 +76,7 @@ watch(
   flex: 0 0 110px;
   object-fit: cover;
   border-radius: 9px;
-  background: #eef1f5;
+  background: var(--media-bg);
 }
 
 .cover.placeholder {
@@ -113,7 +113,7 @@ watch(
 .count {
   font-size: 12.5px;
   color: var(--brand-dark);
-  background: #eff6ff;
+  background: var(--brand-soft);
   border-radius: 999px;
   padding: 1px 10px;
   align-self: flex-start;

@@ -196,9 +196,10 @@ onMounted(loadArticles)
 
 <style scoped>
 .home {
-  /* 与 Hero 底部渐变终点色一致，保证过渡无接缝 */
-  background: #f8f9fa;
+  /* 与 Hero 底部渐变终点色一致，保证过渡无接缝（深色模式自动跟随） */
+  background: var(--page-solid);
   padding-bottom: 48px;
+  transition: background-color 0.3s ease;
 }
 
 /* ============ Hero ============ */
@@ -240,12 +241,13 @@ onMounted(loadArticles)
   }
 }
 
-/* 0.45 黑色半透明遮罩 */
+/* 黑色半透明遮罩：浅色 0.45，深色 0.5（保证文字可读性） */
 .hero-overlay {
   position: absolute;
   inset: 0;
-  background: rgba(0, 0, 0, 0.45);
+  background: rgba(0, 0, 0, var(--hero-overlay));
   pointer-events: none;
+  transition: background-color 0.3s ease;
 }
 
 .hero-content {
@@ -337,24 +339,26 @@ onMounted(loadArticles)
   box-shadow: 0 14px 28px rgba(0, 0, 0, 0.3);
 }
 
-/* 底部渐变：透明 → #f8f9fa */
+/* 底部渐变：透明 → 页面底色（浅色 #f8f9fa / 深色 #0f1115） */
 .hero-fade {
   position: absolute;
   left: 0;
   right: 0;
   bottom: 0;
   height: 120px;
-  background: linear-gradient(to bottom, rgba(248, 249, 250, 0) 0%, #f8f9fa 100%);
+  background: linear-gradient(to bottom, var(--hero-fade-from) 0%, var(--page-solid) 100%);
   pointer-events: none;
   z-index: 2;
+  transition: background 0.3s ease;
 }
 
 /* ============ Hero 下方内容区 ============ */
 .home-body {
   position: relative;
   z-index: 4;
-  background: #f8f9fa;
+  background: var(--page-solid);
   padding-top: 28px;
+  transition: background-color 0.3s ease;
 }
 
 .layout {
@@ -443,14 +447,14 @@ onMounted(loadArticles)
 }
 
 .side-link:hover {
-  background: #f2f6ff;
+  background: var(--brand-soft-2);
   color: var(--brand-dark);
 }
 
 .side-link .count {
   font-size: 12px;
   color: var(--text-3);
-  background: #f3f4f6;
+  background: var(--surface-2);
   padding: 0 8px;
   border-radius: 999px;
 }
@@ -464,7 +468,7 @@ onMounted(loadArticles)
 .tag {
   padding: 3px 11px;
   border-radius: 999px;
-  background: #f3f6ff;
+  background: var(--brand-soft-3);
   color: var(--brand-dark);
   font-size: 13px;
   transition: all 0.16s ease;
@@ -494,7 +498,7 @@ onMounted(loadArticles)
 }
 
 .topic-item:hover {
-  background: #f7f9fc;
+  background: var(--surface-hover);
 }
 
 .topic-cover {
@@ -503,7 +507,7 @@ onMounted(loadArticles)
   flex: 0 0 62px;
   object-fit: cover;
   border-radius: 8px;
-  background: #eef1f5;
+  background: var(--media-bg);
 }
 
 .topic-info {

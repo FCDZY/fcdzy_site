@@ -190,13 +190,13 @@ watch(
 }
 
 .badge.topped {
-  color: #b45309;
-  background: #fef3c7;
+  color: var(--warn-text);
+  background: var(--warn-soft);
 }
 
 .badge.category {
   color: var(--brand-dark);
-  background: #eff6ff;
+  background: var(--brand-soft);
 }
 
 .tags {
@@ -209,7 +209,7 @@ watch(
 .tag {
   padding: 2px 11px;
   border-radius: 999px;
-  background: #f3f6ff;
+  background: var(--brand-soft-3);
   color: var(--brand-dark);
   font-size: 13px;
 }
@@ -226,14 +226,14 @@ watch(
   object-fit: cover;
   border-radius: 10px;
   margin: 18px 0 4px;
-  background: #eef1f5;
+  background: var(--media-bg);
 }
 
 .summary {
   margin: 16px 0 0;
   padding: 12px 16px;
   border-left: 3px solid var(--brand);
-  background: #f7f9fc;
+  background: var(--surface-hover);
   border-radius: 0 8px 8px 0;
   color: var(--text-2);
   font-size: 14.5px;
@@ -314,7 +314,7 @@ watch(
   flex: 0 0 84px;
   object-fit: cover;
   border-radius: 8px;
-  background: #eef1f5;
+  background: var(--media-bg);
 }
 
 .topic-body {

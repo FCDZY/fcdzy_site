@@ -4,9 +4,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useAuthStore } from '@/stores/auth'
 import { useSiteStore } from '@/stores/site'
+import { useTheme } from '@/composables/useTheme'
 
 const auth = useAuthStore()
 const site = useSiteStore()
+const { isDark, toggleTheme } = useTheme()
 const route = useRoute()
 const router = useRouter()
 const collapsed = ref(false)
@@ -76,6 +78,9 @@ async function handleLogout() {
           <span class="title">{{ pageTitle }}</span>
         </div>
         <div class="right">
+          <el-button text :icon="isDark ? 'Sunny' : 'Moon'" @click="toggleTheme">
+            {{ isDark ? '浅色模式' : '深色模式' }}
+          </el-button>
           <el-button text @click="router.push('/')">查看前台</el-button>
           <el-dropdown>
             <span class="user">
@@ -108,8 +113,8 @@ async function handleLogout() {
 }
 
 .aside {
-  background: #1f2937;
-  transition: width 0.2s ease;
+  background: var(--admin-aside-bg);
+  transition: width 0.2s ease, background-color 0.3s ease;
   overflow-x: hidden;
 }
 
@@ -149,7 +154,7 @@ async function handleLogout() {
   background: transparent;
   --el-menu-bg-color: transparent;
   --el-menu-text-color: #cbd5e1;
-  --el-menu-hover-bg-color: rgba(255, 255, 255, 0.08);
+  --el-menu-hover-bg-color: var(--admin-aside-hover);
   --el-menu-active-color: #ffffff;
 }
 
@@ -162,10 +167,11 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: #fff;
+  background: var(--card);
   border-bottom: 1px solid var(--border);
   height: 56px;
   padding: 0 12px;
+  transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
 .left,
@@ -189,7 +195,7 @@ async function handleLogout() {
 }
 
 .user:hover {
-  background: #f3f4f6;
+  background: var(--surface-2);
 }
 
 .username {

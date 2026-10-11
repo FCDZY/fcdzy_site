@@ -334,7 +334,7 @@ onMounted(loadAll)
   padding: 8px 10px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: #fbfcfe;
+  background: var(--surface-subtle);
 }
 
 .order {

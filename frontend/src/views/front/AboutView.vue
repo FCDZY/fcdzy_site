@@ -100,7 +100,7 @@ watch(
   flex: 0 0 92px;
   border-radius: 50%;
   object-fit: cover;
-  background: #eef1f5;
+  background: var(--media-bg);
 }
 
 .avatar.placeholder {
@@ -142,7 +142,7 @@ watch(
   gap: 6px;
   padding: 5px 14px;
   border-radius: 999px;
-  background: #f3f6ff;
+  background: var(--brand-soft-3);
   color: var(--brand-dark);
   font-size: 13.5px;
   transition: all 0.16s ease;
@@ -189,7 +189,7 @@ watch(
 }
 
 .btn.ghost {
-  background: #fff;
+  background: var(--card);
   color: var(--text-1);
   border: 1px solid var(--border);
   box-shadow: none;
@@ -197,7 +197,7 @@ watch(
 
 .btn.ghost:hover {
   color: var(--brand-dark);
-  border-color: #bfdbfe;
+  border-color: var(--chip-border-hover);
 }
 
 @media (max-width: 768px) {

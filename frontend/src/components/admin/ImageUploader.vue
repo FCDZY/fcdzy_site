@@ -73,7 +73,7 @@ async function customUpload(options: any) {
   justify-content: center;
   border: 1px dashed var(--border);
   border-radius: 10px;
-  background: #fafbfc;
+  background: var(--surface-subtle);
   overflow: hidden;
   cursor: pointer;
   transition: border-color 0.16s ease;

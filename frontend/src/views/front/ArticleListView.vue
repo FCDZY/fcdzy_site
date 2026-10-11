@@ -215,7 +215,7 @@ watch(
   padding: 5px 14px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: #fff;
+  background: var(--card);
   color: var(--text-2);
   font-size: 13.5px;
   cursor: pointer;
@@ -224,8 +224,8 @@ watch(
 
 .chip:hover {
   color: var(--brand-dark);
-  border-color: #bfdbfe;
-  background: #f2f6ff;
+  border-color: var(--chip-border-hover);
+  background: var(--brand-soft-2);
 }
 
 .chip.active {

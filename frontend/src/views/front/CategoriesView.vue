@@ -98,7 +98,7 @@ watch(
 .category-card .count {
   font-size: 12.5px;
   color: var(--brand-dark);
-  background: #eff6ff;
+  background: var(--brand-soft);
   border-radius: 999px;
   padding: 1px 10px;
   align-self: flex-start;
@@ -127,7 +127,7 @@ watch(
   gap: 6px;
   padding: 4px 13px;
   border-radius: 999px;
-  background: #f3f6ff;
+  background: var(--brand-soft-3);
   color: var(--brand-dark);
   font-size: 13.5px;
   transition: all 0.16s ease;
