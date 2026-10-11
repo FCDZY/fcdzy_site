@@ -11,6 +11,7 @@
     "typecheck": "vue-tsc --noEmit",
     "check:components": "node scripts/check-components.cjs",
     "smoke:render": "node scripts/smoke-render.cjs",
+    "smoke:hero": "node scripts/smoke-hero.cjs",
     "smoke:admin": "node scripts/smoke-admin.cjs"
   },
   "dependencies": {

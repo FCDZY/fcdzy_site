@@ -12,7 +12,11 @@ const FALLBACK: SiteConfig = {
   authorBio: '',
   footerText: '© 我的个人网站',
   homeBannerTitle: '欢迎来到我的个人网站',
-  homeBannerSubtitle: '这里记录我的技术笔记与生活随笔'
+  homeBannerSubtitle: '这里记录我的技术笔记与生活随笔',
+  /** 首页 Hero 背景图（为空时使用默认渐变） */
+  homeHeroImage: '',
+  /** 首页 Hero 背景呼吸动画开关：'true' / 'false' */
+  homeHeroAnimation: 'true'
 }
 
 export const useSiteStore = defineStore('site', () => {

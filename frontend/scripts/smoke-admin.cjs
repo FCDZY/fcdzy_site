@@ -214,6 +214,13 @@ function check(label, ok) {
     dom = await html()
     console.log('\n站点配置 (/admin/settings)')
     check('站点名称回填', hasText(dom, siteConfig.data.siteName))
+    check('保留 Logo 上传', hasText(dom, '站点 Logo'))
+    check('Hero 背景图上传', hasText(dom, 'Hero 背景图') && hasText(dom, '点击上传图片'))
+    check('背景呼吸动画开关', hasText(dom, '背景呼吸动画') && hasText(dom, 'el-switch'))
+    check(
+      'Hero 背景图地址回填',
+      !siteConfig.data.homeHeroImage || hasText(dom, siteConfig.data.homeHeroImage)
+    )
     check('无控制台报错', consoleErrors.length === 0)
 
     await navigate(`${BASE}/admin/profile`, pageReady)

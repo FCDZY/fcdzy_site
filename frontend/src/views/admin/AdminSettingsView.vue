@@ -23,6 +23,8 @@ interface SettingsForm {
   startYear: string
   homeBannerTitle: string
   homeBannerSubtitle: string
+  homeHeroImage: string
+  homeHeroAnimation: boolean
 }
 
 const site = useSiteStore()
@@ -46,7 +48,9 @@ const form = reactive<SettingsForm>({
   email: '',
   startYear: '',
   homeBannerTitle: '',
-  homeBannerSubtitle: ''
+  homeBannerSubtitle: '',
+  homeHeroImage: '',
+  homeHeroAnimation: true
 })
 
 const activeTab = ref('basic')
@@ -72,6 +76,8 @@ function applyConfig(config: SiteConfig) {
   form.startYear = pad(config.startYear)
   form.homeBannerTitle = pad(config.homeBannerTitle)
   form.homeBannerSubtitle = pad(config.homeBannerSubtitle)
+  form.homeHeroImage = pad(config.homeHeroImage)
+  form.homeHeroAnimation = pad(config.homeHeroAnimation) !== 'false'
 }
 
 async function load() {
@@ -105,7 +111,9 @@ async function handleSave() {
       email: form.email.trim(),
       startYear: form.startYear.trim(),
       homeBannerTitle: form.homeBannerTitle.trim(),
-      homeBannerSubtitle: form.homeBannerSubtitle.trim()
+      homeBannerSubtitle: form.homeBannerSubtitle.trim(),
+      homeHeroImage: form.homeHeroImage.trim(),
+      homeHeroAnimation: form.homeHeroAnimation ? 'true' : 'false'
     }
     await adminApi.updateSiteConfig(payload)
     await site.loadConfig()
@@ -211,6 +219,19 @@ onMounted(load)
 
         <el-tab-pane label="首页 Banner" name="banner">
           <el-form :model="form" label-width="120px" label-position="top" class="form-narrow">
+            <el-form-item label="Hero 背景图">
+              <ImageUploader
+                v-model="form.homeHeroImage"
+                :height="170"
+                tip="建议 1920×1080 以上的横向图片；留空时首页 Hero 使用默认深蓝渐变"
+              />
+            </el-form-item>
+            <el-form-item label="背景呼吸动画">
+              <div class="switch-row">
+                <el-switch v-model="form.homeHeroAnimation" active-text="开启" inactive-text="关闭" />
+                <span class="hint">25 秒一个周期，最大放大 1.04 倍；关闭后背景保持静止</span>
+              </div>
+            </el-form-item>
             <el-form-item label="Banner 主标题">
               <el-input v-model="form.homeBannerTitle" placeholder="如：欢迎来到我的个人网站" maxlength="80" clearable />
             </el-form-item>
@@ -249,6 +270,18 @@ onMounted(load)
 
 .form-narrow {
   max-width: 640px;
+}
+
+.switch-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.hint {
+  font-size: 12.5px;
+  color: var(--text-3);
 }
 
 .footer-bar {
