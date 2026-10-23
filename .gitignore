@@ -1,0 +1,33 @@
+# 后端
+backend/target/
+backend/uploads/
+# 本地私有配置：SMTP 授权码等敏感信息，绝对不要提交
+backend/src/main/resources/application-local.yml
+# 数据库连接（真实账号密码），同样不进仓库
+backend/src/main/resources/application-db.yml
+*.jar
+*.war
+
+# 前端
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+npm-debug.log*
+pnpm-debug.log*
+
+# IDE / 系统
+.idea/
+.vscode/
+*.iml
+.DS_Store
+Thumbs.db
+
+# 日志
+*.log
+logs/
+
+# 部署（.env 里是真实密码，绝对不要提交）
+.env
+.env.local
+.env.*.local
+deploy/certs/
