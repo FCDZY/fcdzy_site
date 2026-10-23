@@ -1,0 +1,18 @@
+{
+    "备份时间":  "2026-10-21T13:24:26+08:00",
+    "说明":  "删除 siteName / siteSubtitle / siteLogo 三行配置前的快照。需要恢复时把 rows 里的键值写回 site_config 表即可（siteLogo 的图片文件仍在 backend/uploads 下未删除）。",
+    "rows":  [
+                 {
+                     "config_key":  "siteLogo",
+                     "config_value":  "http://localhost:8080/uploads/2026/10/7e9ae15daff14ec39bf06e83ea3c1074.jpg"
+                 },
+                 {
+                     "config_key":  "siteName",
+                     "config_value":  "FCDZY个人博客"
+                 },
+                 {
+                     "config_key":  "siteSubtitle",
+                     "config_value":  ""
+                 }
+             ]
+}

@@ -1,0 +1,10 @@
+# 构建镜像时不需要打进上下文的东西
+target/
+!.mvn/wrapper/maven-wrapper.jar
+*.iml
+.idea/
+.vscode/
+uploads/
+*.log
+Dockerfile
+.dockerignore

@@ -1,0 +1,594 @@
+/* ============================================================
+   全局主题变量
+   浅色（:root）保持原有取值不变，深色（html.dark）覆盖语义色
+   ============================================================ */
+:root {
+  color-scheme: light;
+
+  --brand: #3b82f6;
+  --brand-dark: #2563eb;
+  --text-1: #1f2937;
+  --text-2: #4b5563;
+  --text-3: #6b7280;
+  --bg: #f7f8fa;
+  --card: #ffffff;
+  --border: #e5e7eb;
+  --radius: 12px;
+  --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --shadow-md: 0 6px 20px rgba(16, 24, 40, 0.08);
+  --header-height: 62px;
+
+  /* 语义色：浅色取值与原样式完全一致 */
+  --surface-2: #f3f4f6;
+  --surface-hover: #f7f9fc;
+  --surface-subtle: #fafbfc;
+  --brand-soft: #eff6ff;
+  --brand-soft-2: #f2f6ff;
+  --brand-soft-3: #f3f6ff;
+  --chip-border-hover: #bfdbfe;
+  --card-hover-border: #dbe4f3;
+  --warn-soft: #fef3c7;
+  --warn-text: #b45309;
+  --media-bg: #eef1f5;
+  --header-bg: rgba(255, 255, 255, 0.92);
+  --footer-bg: transparent;
+  --page-solid: #f8f9fa;
+
+  /* ===== 全局固定背景（挂在 body 上） ===== */
+  /* 未配置背景图时的默认渐变，后台配置后由站点 store 覆盖为 url(...) */
+  --page-bg-image: linear-gradient(160deg, #eef4ff 0%, #f7f9fc 55%, #ffffff 100%);
+  --page-bg-image-dark: linear-gradient(160deg, #0b1220 0%, #111827 55%, #0f1115 100%);
+  /* 背景之上的薄纱已移除：页面全程完整展示背景图（不再有整体发白） */
+  /* 卡片：毛玻璃（半透明白 + 6px 模糊，通透锐利 + 极淡白色描边），不做白色实底 */
+  --surface-card: rgba(255, 255, 255, 0.45);
+  --surface-card-blur: 6px;
+  --surface-card-border: rgba(255, 255, 255, 0.2);
+  /* 背景亮度归一化：只作用于滤镜、不额外铺底色，让文字在任意背景图上都保持对比度 */
+  --surface-card-filter: saturate(125%) brightness(1.16);
+  /* 长文阅读容器单独用更实的底，保证正文长时间阅读不费眼 */
+  --surface-reading: rgba(255, 255, 255, 0.84);
+  /* 浮在背景上的标题描边，保证浅色标题也可读 */
+  --page-heading-shadow: rgba(255, 255, 255, 0.65);
+  /* 深色玻璃卡片（文章卡片 / 侧栏内容卡片）：深色半透底 + 白字，文字可读性最好 */
+  --surface-card-dark: rgba(15, 23, 42, 0.5);
+  --surface-card-dark-border: rgba(255, 255, 255, 0.16);
+  --text-on-dark-1: #ffffff;
+  --text-on-dark-2: rgba(255, 255, 255, 0.88);
+  --text-on-dark-3: rgba(255, 255, 255, 0.72);
+  --text-on-dark-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
+  --text-on-dark-shadow-strong: 0 1px 3px rgba(0, 0, 0, 0.55);
+  /* 标签彩色调色板：深色玻璃上用亮色系（深浅主题一致） */
+  --tag-c-0: #7dd3fc;
+  --tag-c-1: #67e8f9;
+  --tag-c-2: #c4b5fd;
+  --tag-c-3: #f9a8d4;
+  --tag-c-4: #fdba74;
+  --tag-c-5: #86efac;
+  --tag-c-6: #fde68a;
+  --tag-c-7: #5eead4;
+  /* Hero 底部渐变层：alpha 已全部置 0 —— 即不叠加任何遮罩，边界两侧都是纯背景，
+     衔接完全无痕（无横带、无分割线）。如需极轻微柔化，只改这一个 token 即可 */
+  --hero-fade-from: rgba(255, 255, 255, 0);
+  --hero-fade-to: rgba(255, 255, 255, 0);
+  --hero-fade-height: 40px;
+
+  /* Hero 顶部遮罩（纯黑压暗，向下淡出，避免与下方背景出现硬边） */
+  --hero-overlay: 0.45;
+
+  /* 代码块 */
+  --code-bg: #f6f8fa;
+  --code-border: #e5e7eb;
+  --code-text: #24292e;
+  --code-lineno: #a8b1bd;
+  --code-inline-bg: #f1f3f5;
+  --code-btn-bg: rgba(255, 255, 255, 0.92);
+  --code-btn-text: #4b5563;
+  --code-btn-border: #dfe3e8;
+  --code-toolbar-text: #8b93a1;
+
+  /* 后台深色侧边栏 */
+  --admin-aside-bg: #1f2937;
+  --admin-aside-hover: rgba(255, 255, 255, 0.08);
+
+  /* 文章卡片阴影 */
+  --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.04);
+  --card-shadow-hover: 0 12px 28px rgba(16, 24, 40, 0.16), 0 4px 10px rgba(16, 24, 40, 0.1);
+}
+
+html.dark {
+  color-scheme: dark;
+
+  --brand: #60a5fa;
+  --brand-dark: #93c5fd;
+  --text-1: #e8ebf0;
+  --text-2: #b2b9c5;
+  --text-3: #888f9d;
+  --bg: #0f1115;
+  --card: #171a21;
+  --border: #2a3039;
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.5);
+  --shadow-md: 0 8px 24px rgba(0, 0, 0, 0.55);
+
+  --surface-2: #232833;
+  --surface-hover: #1e232c;
+  --surface-subtle: #1a1e26;
+  --brand-soft: #1b2740;
+  --brand-soft-2: #1b2434;
+  --brand-soft-3: #1b2740;
+  --chip-border-hover: #3d5f92;
+  --card-hover-border: #34405a;
+  --warn-soft: #3a2f14;
+  --warn-text: #f0b429;
+  --media-bg: #232833;
+  --header-bg: rgba(23, 26, 33, 0.92);
+  --footer-bg: transparent;
+  --page-solid: #0f1115;
+  --surface-card: rgba(23, 26, 33, 0.62);
+  --surface-card-border: rgba(255, 255, 255, 0.12);
+  --surface-card-filter: saturate(120%) brightness(0.82);
+  --surface-reading: rgba(23, 26, 33, 0.8);
+  --surface-card-dark: rgba(23, 26, 33, 0.62);
+  --surface-card-dark-border: rgba(255, 255, 255, 0.12);
+  --page-heading-shadow: rgba(0, 0, 0, 0.55);
+  /* 标签调色板与浅色主题一致（深色玻璃上用亮色系，--tag-c-* 已定义在 :root） */
+  --hero-fade-from: rgba(31, 41, 55, 0);
+  --hero-fade-to: rgba(31, 41, 55, 0);
+  --hero-overlay: 0.5;
+
+  --code-bg: #0d1117;
+  --code-border: #21262d;
+  --code-text: #c9d1d9;
+  --code-lineno: #6e7681;
+  --code-inline-bg: #232833;
+  --code-btn-bg: rgba(255, 255, 255, 0.08);
+  --code-btn-text: #adbac7;
+  --code-btn-border: #30363d;
+  --code-toolbar-text: #8b949e;
+
+  --admin-aside-bg: #12151b;
+  --admin-aside-hover: rgba(255, 255, 255, 0.06);
+
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
+  --card-shadow-hover: 0 12px 28px rgba(0, 0, 0, 0.6), 0 4px 10px rgba(0, 0, 0, 0.45);
+
+  /* 让 Element Plus 深色面板/文字与自定义 token 对齐，避免出现两种不同的灰 */
+  --el-bg-color: var(--bg);
+  --el-bg-color-page: var(--bg);
+  --el-bg-color-overlay: var(--card);
+  --el-fill-color-blank: var(--card);
+  --el-border-color: var(--border);
+  --el-border-color-light: var(--border);
+  --el-border-color-lighter: var(--border);
+  --el-text-color-primary: var(--text-1);
+  --el-text-color-regular: var(--text-2);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+  margin: 0;
+  padding: 0;
+  min-height: 100%;
+}
+
+/* 全局固定背景：铺满视口、居中、不重复、滚动时不动 */
+body {
+  background-color: var(--bg);
+  background-image: var(--page-bg-image);
+  background-size: cover;
+  background-position: center center;
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  color: var(--text-1);
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'PingFang SC', 'Hiragino Sans GB',
+    'Microsoft YaHei', 'Helvetica Neue', Arial, sans-serif;
+  font-size: 15px;
+  line-height: 1.7;
+  -webkit-font-smoothing: antialiased;
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* 深色模式自动换成深色背景图（未单独配置时沿用浅色图） */
+html.dark body {
+  background-image: var(--page-bg-image-dark);
+}
+
+/*
+ * 后台可开关的「背景呼吸」：固定背景不做缩放（会带动整页或每帧整屏重绘），
+ * 这里做成极缓慢的位移，视觉上是背景在轻微起伏。
+ */
+@keyframes page-bg-breath {
+  0%,
+  100% {
+    background-position: 50% 50%;
+  }
+  50% {
+    background-position: 50% 47%;
+  }
+}
+
+html.has-page-bg.page-bg-breath body {
+  animation: page-bg-breath 25s ease-in-out infinite;
+}
+
+/* 主题切换瞬间给全局加一次性过渡，避免生硬跳变（不影响常驻交互过渡） */
+html.theme-transition,
+html.theme-transition *,
+html.theme-transition *::before,
+html.theme-transition *::after {
+  transition: background-color 0.3s ease, border-color 0.3s ease, color 0.3s ease,
+    box-shadow 0.3s ease, fill 0.3s ease !important;
+  transition-delay: 0s !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html.theme-transition,
+  html.theme-transition *,
+  html.theme-transition *::before,
+  html.theme-transition *::after {
+    transition: none !important;
+  }
+
+  html.has-page-bg.page-bg-breath body {
+    animation: none;
+  }
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+img {
+  max-width: 100%;
+}
+
+.container {
+  width: 100%;
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 0 16px;
+}
+
+.page {
+  padding: 24px 0 56px;
+}
+
+.page-title {
+  font-size: 22px;
+  font-weight: 700;
+  margin: 0 0 4px;
+}
+
+/* 直接浮在全局背景图上的文字：与导航栏统一用白字 + 深色描边，保证任意图片上可读 */
+.page-title,
+.page-subtitle {
+  color: #fff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.5);
+}
+
+/* 首页板块标题贴在较亮的图片区域，沿用深字 + 浅色描边 */
+.section-head h2,
+.more {
+  text-shadow: 0 1px 3px var(--page-heading-shadow);
+}
+
+.page-subtitle {
+  font-size: 14px;
+  margin: 0 0 20px;
+}
+
+/* 卡片 / 侧边栏容器：毛玻璃 —— 半透明底色 + 6px 模糊 + 极淡描边，适配任意背景图 */
+.card {
+  background: var(--surface-card);
+  backdrop-filter: blur(var(--surface-card-blur)) var(--surface-card-filter);
+  -webkit-backdrop-filter: blur(var(--surface-card-blur)) var(--surface-card-filter);
+  border: 1px solid var(--surface-card-border);
+  border-radius: var(--radius);
+  /* 外侧柔和阴影 + 左上内高光：靠光影勾勒玻璃边缘，而不是靠白色实底 */
+  box-shadow: var(--shadow-sm), inset 0 1px 0 rgba(255, 255, 255, 0.38);
+  transition: background-color 0.3s ease, border-color 0.3s ease, box-shadow 0.3s ease;
+}
+
+/*
+ * 深色玻璃卡片（文章卡片 / 侧栏内容卡片）：
+ * 与浅色玻璃共用模糊、圆角、阴影，只把底色换成深色半透、文字转白，
+ * 这样白字压在背景图上既有足够对比度，又保留「透出背景」的玻璃感。
+ */
+.card--dark {
+  background: var(--surface-card-dark);
+  border-color: var(--surface-card-dark-border);
+  color: var(--text-on-dark-2);
+}
+
+.muted {
+  color: var(--text-3);
+}
+
+.flex-between {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.empty {
+  padding: 48px 16px;
+  text-align: center;
+  color: var(--text-3);
+}
+
+/* ============ Markdown 正文 ============ */
+.markdown-body {
+  font-size: 16px;
+  line-height: 1.85;
+  color: var(--text-1);
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+.markdown-body h1,
+.markdown-body h2,
+.markdown-body h3,
+.markdown-body h4 {
+  margin: 1.6em 0 0.6em;
+  font-weight: 700;
+  line-height: 1.35;
+  scroll-margin-top: calc(var(--header-height) + 16px);
+}
+
+.markdown-body h1 {
+  font-size: 1.7em;
+  padding-bottom: 0.3em;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-body h2 {
+  font-size: 1.4em;
+  padding-bottom: 0.25em;
+  border-bottom: 1px solid var(--border);
+}
+
+.markdown-body h3 {
+  font-size: 1.18em;
+}
+
+.markdown-body p {
+  margin: 0.9em 0;
+}
+
+.markdown-body ul,
+.markdown-body ol {
+  padding-left: 1.5em;
+  margin: 0.8em 0;
+}
+
+.markdown-body li + li {
+  margin-top: 0.3em;
+}
+
+.markdown-body blockquote {
+  margin: 1em 0;
+  padding: 8px 16px;
+  color: var(--text-2);
+  background: var(--brand-soft-3);
+  border-left: 4px solid var(--brand);
+  border-radius: 0 8px 8px 0;
+}
+
+.markdown-body a {
+  color: var(--brand-dark);
+  border-bottom: 1px solid rgba(37, 99, 235, 0.35);
+}
+
+.markdown-body a:hover {
+  border-bottom-color: var(--brand-dark);
+}
+
+.markdown-body img {
+  display: block;
+  margin: 1em auto;
+  border-radius: 8px;
+  box-shadow: var(--shadow-sm);
+}
+
+.markdown-body code {
+  font-family: 'JetBrains Mono', 'Fira Code', Consolas, Monaco, 'Courier New', monospace;
+  font-size: 0.9em;
+  background: var(--code-inline-bg);
+  padding: 0.15em 0.4em;
+  border-radius: 4px;
+}
+
+/* 缩进式代码块（无语言标识）保持原有外观 */
+.markdown-body pre {
+  margin: 1.1em 0;
+  padding: 14px 16px;
+  overflow-x: auto;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  border-radius: 10px;
+  line-height: 1.6;
+  color: var(--code-text);
+}
+
+.markdown-body pre code {
+  background: transparent;
+  padding: 0;
+  font-size: 13.5px;
+}
+
+/* ===== fenced 代码块：语言标签 + 行号 + 一键复制 ===== */
+.markdown-body pre.hljs {
+  position: relative;
+  padding: 40px 0 12px;
+  overflow: hidden;
+  background: var(--code-bg);
+  border: 1px solid var(--code-border);
+  transition: background-color 0.3s ease, border-color 0.3s ease;
+}
+
+.markdown-body pre.hljs::before {
+  content: attr(data-lang);
+  position: absolute;
+  top: 12px;
+  left: 16px;
+  font-size: 12px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--code-toolbar-text);
+}
+
+.markdown-body pre.hljs code {
+  display: block;
+  overflow-x: auto;
+  counter-reset: code-line;
+  color: inherit;
+}
+
+.markdown-body pre.hljs .code-line {
+  display: block;
+  padding: 0 16px 0 56px;
+  white-space: pre;
+  counter-increment: code-line;
+}
+
+.markdown-body pre.hljs .code-line::before {
+  content: counter(code-line);
+  position: absolute;
+  left: 0;
+  width: 40px;
+  padding-right: 8px;
+  text-align: right;
+  color: var(--code-lineno);
+  user-select: none;
+  pointer-events: none;
+}
+
+.markdown-body .code-copy {
+  position: absolute;
+  top: 8px;
+  right: 10px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 10px;
+  font-family: inherit;
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--code-btn-text);
+  background: var(--code-btn-bg);
+  border: 1px solid var(--code-btn-border);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: color 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
+}
+
+.markdown-body .code-copy:hover {
+  color: var(--brand-dark);
+  border-color: var(--chip-border-hover);
+}
+
+.markdown-body .code-copy.is-copied {
+  color: #16a34a;
+  border-color: #86efac;
+}
+
+html.dark .markdown-body .code-copy.is-copied {
+  color: #56d364;
+  border-color: #2ea043;
+}
+
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 1em 0;
+  font-size: 14.5px;
+  display: block;
+  overflow-x: auto;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.markdown-body thead th {
+  background: var(--surface-2);
+  font-weight: 600;
+}
+
+.markdown-body hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.8em 0;
+}
+
+/* ============ Element Plus 微调 ============ */
+.el-card {
+  border-radius: var(--radius);
+}
+
+.admin-page {
+  padding: 18px;
+}
+
+.admin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+/* ============ 响应式 ============ */
+@media (max-width: 768px) {
+  body {
+    font-size: 14.5px;
+  }
+
+  .container {
+    padding: 0 12px;
+  }
+
+  .page {
+    padding: 16px 0 40px;
+  }
+
+  .page-title {
+    font-size: 19px;
+  }
+
+  .markdown-body {
+    font-size: 15.5px;
+  }
+
+  .markdown-body pre:not(.hljs) {
+    padding: 12px;
+    border-radius: 8px;
+  }
+
+  .markdown-body pre.hljs {
+    padding: 36px 0 10px;
+    border-radius: 8px;
+  }
+
+  .markdown-body pre.hljs .code-line {
+    padding-left: 44px;
+  }
+
+  .markdown-body pre.hljs .code-line::before {
+    width: 30px;
+  }
+
+  .admin-page {
+    padding: 12px;
+  }
+}

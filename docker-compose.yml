@@ -1,0 +1,106 @@
+# 个人网站（SpringBoot + Vue3 + MySQL）单机 Docker 编排
+# 适用于阿里云 ECS：一台机器跑 MySQL + 后端 + Nginx(前端静态资源 + 反向代理)
+#
+#   cp .env.example .env   # 改好里面的密码和域名
+#   docker compose up -d --build
+#
+# 只有 Nginx 的 80/443 暴露到公网，后端与数据库只在内部网络互通。
+
+name: fcdzy-site
+
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: fcdzy-mysql
+    restart: unless-stopped
+    command:
+      - "--character-set-server=utf8mb4"
+      - "--collation-server=utf8mb4_general_ci"
+      - "--default-time-zone=+08:00"
+      - "--max_connections=200"
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      MYSQL_DATABASE: ${MYSQL_DATABASE}
+      TZ: "${TZ:-Asia/Shanghai}"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD --silent"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 40s
+    networks:
+      - fcdzy
+    # 默认不对公网暴露数据库；确实需要远程连库时再放开，并在安全组里只放行自己的 IP
+    # ports:
+    #   - "127.0.0.1:3306:3306"
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    image: fcdzy-site-backend:latest
+    container_name: fcdzy-backend
+    restart: unless-stopped
+    depends_on:
+      mysql:
+        condition: service_healthy
+    environment:
+      TZ: "${TZ:-Asia/Shanghai}"
+      SPRING_DATASOURCE_URL: "jdbc:mysql://mysql:3306/${MYSQL_DATABASE}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true"
+      SPRING_DATASOURCE_USERNAME: root
+      SPRING_DATASOURCE_PASSWORD: ${MYSQL_ROOT_PASSWORD}
+      SITE_UPLOAD_DIR: /app/uploads
+      SITE_BASE_URL: ${SITE_BASE_URL}
+      SITE_WEB_URL: ${SITE_WEB_URL}
+      SITE_JWT_SECRET: ${SITE_JWT_SECRET}
+      SITE_JWT_EXPIRE_HOURS: ${SITE_JWT_EXPIRE_HOURS:-24}
+      SITE_ADMIN_USERNAME: ${SITE_ADMIN_USERNAME:-admin}
+      SITE_ADMIN_PASSWORD: ${SITE_ADMIN_PASSWORD:-admin123}
+      SITE_ADMIN_NICKNAME: ${SITE_ADMIN_NICKNAME:-admin}
+      JAVA_OPTS: "-Xms256m -Xmx${BACKEND_MAX_HEAP:-512m} -Duser.timezone=Asia/Shanghai -Dfile.encoding=UTF-8"
+    volumes:
+      # 上传的图片放在命名卷里，重建容器不会丢
+      - uploads-data:/app/uploads
+    networks:
+      - fcdzy
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://127.0.0.1:8080/api/public/site-config > /dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 40s
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    image: fcdzy-site-frontend:latest
+    container_name: fcdzy-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        # 后端起来就行；Nginx 不依赖后端健康状态，避免后端慢启动拖住前端
+        condition: service_started
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      # 配好 HTTPS 后把下面这行也打开
+      # - "${HTTPS_PORT:-443}:443"
+    environment:
+      TZ: "${TZ:-Asia/Shanghai}"
+    volumes:
+      # HTTPS 证书目录（可选，见教程第 7 步）
+      # - ./deploy/certs:/etc/nginx/certs:ro
+      - nginx-cache:/var/cache/nginx
+    networks:
+      - fcdzy
+
+volumes:
+  mysql-data:
+  uploads-data:
+  nginx-cache:
+
+networks:
+  fcdzy:
+    driver: bridge

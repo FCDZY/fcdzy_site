@@ -1,0 +1,119 @@
+server:
+  # 也可以用环境变量 SERVER_PORT 覆盖
+  port: ${SERVER_PORT:8080}
+
+spring:
+  application:
+    name: fcdzy-site
+
+  # ===== 私有配置（都不进仓库，见 .gitignore）=====
+  # application-db.yml  ：数据库连接（url / 用户名 / 密码）
+  # application-local.yml：第三方密钥（JWT 密钥、SMTP 授权码、OSS AccessKey、初始管理员密码）
+  # 两份文件都配置成 optional：缺失时用下面的占位符/默认值，缺失时记得按 README 补上。
+  config:
+    import:
+      - optional:classpath:application-db.yml
+      - optional:classpath:application-local.yml
+
+  # ===== 邮件（评论通知）=====
+  # 授权码属于敏感信息，只写在 application-local.yml 的 spring.mail.password
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:your-qq-mail@qq.com}
+    password: ${MAIL_SMTP_CODE:}
+    default-encoding: UTF-8
+    properties:
+      mail.smtp.auth: true
+      mail.smtp.ssl.enable: true
+      mail.smtp.timeout: 10000
+      mail.smtp.connectiontimeout: 10000
+
+  # ===== 数据库 =====
+  # 这里只有占位符：真实账号密码请写进 application-db.yml（已 gitignore），
+  # 或用环境变量 DB_HOST / DB_PORT / DB_NAME / DB_USERNAME / DB_PASSWORD 覆盖。
+  # 生产建议单独建一个只对本站库授权的账号，不要用 root。
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://${DB_HOST:localhost}:${DB_PORT:3306}/${DB_NAME:fcdzy_site}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true&rewriteBatchedStatements=true
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:}
+
+  jpa:
+    hibernate:
+      # update：启动时自动建表/加字段（个人项目够用）
+      ddl-auto: update
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.MySQLDialect
+        format_sql: false
+
+  jackson:
+    time-zone: Asia/Shanghai
+
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 20MB
+
+  web:
+    resources:
+      add-mappings: true
+
+site:
+  # 上传文件保存目录（相对启动目录，也可写绝对路径）
+  upload-dir: ${UPLOAD_DIR:./uploads}
+  # 对外访问地址，用于拼接本地图片完整地址 / sitemap
+  base-url: ${SITE_BASE_URL:http://localhost:8080}
+  # 前台站点地址，用于 sitemap 中的页面链接
+  web-url: ${SITE_WEB_URL:http://localhost:5173}
+  # 全站统一时区：定时发布时间、后台「服务器时间」都用它（避免前端本地时区偏差）
+  time-zone: Asia/Shanghai
+  # 定时发布轮询间隔（毫秒），默认 30 秒；单实例部署，不依赖 Redis/MQ
+  schedule:
+    poll-ms: 30000
+
+  # 阿里云 OSS 图片存储（后端中转上传）
+  # AccessKey 属于敏感信息：只写在 application-local.yml 的 site.oss.access-key-id / access-key-secret
+  oss:
+    endpoint: ${OSS_ENDPOINT:oss-cn-beijing.aliyuncs.com}
+    bucket-name: ${OSS_BUCKET:your-bucket-name}
+    access-key-id: ${OSS_ACCESS_KEY_ID:}
+    access-key-secret: ${OSS_ACCESS_KEY_SECRET:}
+    # 对象目录前缀：image/yyyyMMdd/uuid.ext
+    dir-prefix: image
+    # 单张图片上限 5MB
+    max-size-bytes: 5242880
+    # Cache-Control max-age：30 天，充分利用浏览器缓存
+    cache-max-age: 2592000
+
+  jwt:
+    # HS256 要求密钥长度不少于 32 字节。
+    # 真实密钥写在 application-local.yml 的 site.jwt.secret，或用环境变量 JWT_SECRET 覆盖；
+    # 下面的默认值只用于本地跑通，部署到公网前务必替换。
+    secret: ${JWT_SECRET:dev-only-change-me-32-bytes-minimum-secret}
+    expire-hours: 24
+
+  admin:
+    # 首次启动时自动创建的管理员账号（账号已存在则不会覆盖，改这里不影响已有密码）
+    # 初始密码请写进 application-local.yml 的 site.admin.password，或用环境变量 ADMIN_PASSWORD 覆盖
+    username: ${ADMIN_USERNAME:admin}
+    password: ${ADMIN_PASSWORD:change-me-on-first-run}
+    nickname: 站长
+
+  comment:
+    # 新评论通知邮件的收件人（站长）
+    notify-to: ${COMMENT_NOTIFY_TO:your-qq-mail@qq.com}
+    # 一键关闭邮件通知（本地压测 / 不想发信时设为 false）
+    mail-enabled: ${COMMENT_MAIL_ENABLED:true}
+    # 防刷：同一 IP 多少秒内只能发 1 条评论
+    rate-limit-seconds: 30
+    # 防刷：同一 IP 每小时最多多少条
+    rate-limit-per-hour: 10
+
+logging:
+  level:
+    root: info
+    com.fcdzy.site: info
+    org.hibernate.SQL: warn
