@@ -10,6 +10,8 @@ const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const ADMIN_USER = process.env.SMOKE_ADMIN_USER || 'admin'
+const ADMIN_PASS = process.env.SMOKE_ADMIN_PASS || 'admin123'
 
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const API = process.env.SMOKE_API || 'http://127.0.0.1:8080'
@@ -108,7 +110,7 @@ const PROBE_EDITOR = `(() => {
   const login = await fetch(`${API}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' })
+    body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS })
   }).then((r) => r.json())
   token = login?.data?.token
   if (!token) throw new Error('管理员登录失败，请确认后端已启动')
@@ -251,7 +253,7 @@ const PROBE_EDITOR = `(() => {
       await evaluate(`localStorage.setItem('fcdzy_admin_token', ${JSON.stringify(token)})`)
 
       // --- 编辑器 ---
-      await send('Page.navigate', { url: `${BASE}/admin/articles/new` })
+      await send('Page.navigate', { url: `${BASE}/yzdcf/articles/new` })
       for (let i = 0; i < 40; i++) {
         await sleep(400)
         if (await evaluate("!!document.querySelector('.footer-bar')")) break
@@ -342,7 +344,7 @@ const PROBE_EDITOR = `(() => {
       // --- 列表页：定时标签 + 取消定时 ---
       const listScheduled = await createArticle({ title: `定时UI-${stamp}`, status: 'SCHEDULED', schedulePublishTime: shift(now, 900) })
       created.push(listScheduled.data.id)
-      await send('Page.navigate', { url: `${BASE}/admin/articles` })
+      await send('Page.navigate', { url: `${BASE}/yzdcf/articles` })
       for (let i = 0; i < 40; i++) {
         await sleep(400)
         if (await evaluate("!!document.querySelector('.el-table__row')")) break
@@ -386,7 +388,7 @@ const PROBE_EDITOR = `(() => {
       check('UI 取消定时后清空时间', !afterCancel.data?.schedulePublishTime, `${afterCancel.data?.schedulePublishTime}`)
 
       // --- 仪表盘 ---
-      await send('Page.navigate', { url: `${BASE}/admin` })
+      await send('Page.navigate', { url: `${BASE}/yzdcf` })
       for (let i = 0; i < 40; i++) {
         await sleep(400)
         if (await evaluate("!!document.querySelector('.stat-value')")) break

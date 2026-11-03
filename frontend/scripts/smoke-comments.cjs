@@ -12,11 +12,15 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
+const { firstPublishedSlug } = require('./_helpers.cjs')
+const ADMIN_USER = process.env.SMOKE_ADMIN_USER || 'admin'
+const ADMIN_PASS = process.env.SMOKE_ADMIN_PASS || 'admin123'
+
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const API = process.env.SMOKE_API || 'http://127.0.0.1:8080'
 const DEBUG_PORT = 9677
 const VIEW = { width: 1440, height: 900 }
-const ARTICLE_SLUG = 'build-personal-site'
+let ARTICLE_SLUG = process.env.SMOKE_ARTICLE || ''
 const MARK = `smoke-${Date.now().toString(36)}`
 
 const chromeCandidates = [
@@ -135,14 +139,44 @@ const PROBE = `(() => {
 })()`
 
 ;(async () => {
-  // ===== 1. 准备：登录拿 token、清掉历史测试评论 =====
-  const login = await apiCall('POST', '/auth/login', { body: { username: 'admin', password: 'admin123' } })
+  // ===== 1. 准备：登录拿 token、建一篇临时文章（隔离真实评论数据）=====
+  const login = await apiCall('POST', '/auth/login', { body: { username: ADMIN_USER, password: ADMIN_PASS } })
   const token = login.data?.token
   if (!token) throw new Error('管理员登录失败，请确认后端已启动')
 
-  const cleanup = async () => {
+  // 用一篇临时文章承载测试评论：跑完删除该文章，评论随外键级联删除，
+  // 绝不碰站内已有的真实评论（例如访客在你文章下留的言）。
+  const tempArticle = await apiCall('POST', '/admin/articles', {
+    token,
+    body: {
+      title: `评论测试-${MARK}`,
+      content: '# 评论测试\n\n这是冒烟测试自动创建的临时文章。',
+      status: 'PUBLISHED',
+      categoryId: 1,
+      tagIds: [],
+      topped: false
+    }
+  })
+  if (!tempArticle.data?.slug) throw new Error('创建临时文章失败：' + (tempArticle.message || ''))
+  ARTICLE_SLUG = tempArticle.data.slug
+  const tempArticleId = tempArticle.data.id
+  console.log('临时文章: id=' + tempArticleId + ' slug=' + ARTICLE_SLUG + ' status=' + tempArticle.data.status)
+  {
+    // 立刻用公开接口验证一次，确保临时文章真的可见（否则后面的页面断言会得到「文章不存在」）
+    const pub = await fetch(`${API}/api/public/articles/${ARTICLE_SLUG}`)
+    if (pub.status !== 200) throw new Error('临时文章创建后公开接口不可见：HTTP ' + pub.status)
+  }
+
+  const cleanup = async ({ deleteArticle = false } = {}) => {
+    // 只在收尾时删除临时文章（评论会被外键级联删掉）
+    if (deleteArticle && tempArticleId) {
+      await apiCall('DELETE', `/admin/articles/${tempArticleId}`, { token }).catch(() => {})
+    }
+    // 再兜底清理带本次标记的评论（例如文章删除失败的情况）
     const list = await apiCall('GET', `/admin/comments?status=ALL&pageNum=1&pageSize=100`, { token })
-    const mine = (list.data?.list || []).filter((c) => c.content.includes(MARK) || c.nickname.includes(MARK))
+    const mine = (list.data?.list || []).filter(
+      (c) => String(c.content || '').includes(MARK) || String(c.nickname || '').includes(MARK)
+    )
     for (const c of mine) {
       await apiCall('DELETE', `/admin/comments/${c.id}`, { token })
     }
@@ -250,9 +284,13 @@ const PROBE = `(() => {
     }
     const shotPrefix = process.env.SMOKE_SHOT
     const articleUrl = `${BASE}/article/${ARTICLE_SLUG}`
-
     // ===== 2. 前台上半场：初始状态 =====
     await goto(articleUrl)
+    // 评论区没渲染出来时给出可读的错误（而不是 null.scrollIntoView）
+    if (!(await evaluate("!!document.querySelector('.comments')"))) {
+      const state = await evaluate("JSON.stringify({ url: location.pathname, text: (document.body.innerText||'').slice(0,160).replace(/\\s+/g,' ') })")
+      throw new Error('临时文章页没有渲染出评论区：' + state)
+    }
     await evaluate("document.querySelector('.comments').scrollIntoView({ block: 'start' })")
     await sleep(400)
     const initial = await probe()
@@ -403,7 +441,7 @@ const PROBE = `(() => {
     console.log('\n【需求 3】后台「评论管理」：查看、通过、删除')
     await goto(`${BASE}/`, "!!document.querySelector('#app')")
     await evaluate(`localStorage.setItem('fcdzy_admin_token', ${JSON.stringify(token)})`)
-    await send('Page.navigate', { url: `${BASE}/admin/comments` })
+    await send('Page.navigate', { url: `${BASE}/yzdcf/comments` })
     for (let i = 0; i < 40; i++) {
       await sleep(300)
       if (await evaluate("!!document.querySelector('.el-table__row') || !!document.querySelector('.el-table__empty-text')")) break
@@ -465,7 +503,7 @@ const PROBE = `(() => {
 
     console.log(failures === 0 ? '\n评论模块检查全部通过 ✅' : `\n共有 ${failures} 项未通过 ❌`)
   } finally {
-    await cleanup().catch(() => {})
+    await cleanup({ deleteArticle: true }).catch(() => {})
     proc.kill()
   }
   process.exit(failures === 0 ? 0 : 1)

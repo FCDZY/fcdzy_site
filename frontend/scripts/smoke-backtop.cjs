@@ -7,6 +7,8 @@ const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const ADMIN_USER = process.env.SMOKE_ADMIN_USER || 'admin'
+const ADMIN_PASS = process.env.SMOKE_ADMIN_PASS || 'admin123'
 
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const API = process.env.SMOKE_API || 'http://127.0.0.1:8080'
@@ -264,12 +266,12 @@ const PROBE = `(() => {
 
     console.log('\n【需求 1】后台页面同样生效')
     const token = await evaluate(
-      `fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'admin123' }) })
+      `fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: '${ADMIN_USER}', password: '${ADMIN_PASS}' }) })
         .then(r => r.json()).then(d => { localStorage.setItem('fcdzy_admin_token', d.data.token); return d.data.token })`
     )
     check('后台登录 token 已写入', typeof token === 'string' && token.length > 20)
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 700, deviceScaleFactor: 1, mobile: false })
-    await goto(`${BASE}/admin/articles/1/edit`, "!!document.querySelector('.md-editor')")
+    await goto(`${BASE}/yzdcf/articles/1/edit`, "!!document.querySelector('.md-editor')")
     const adminTop = await probe()
     check('后台页面已挂载按钮', adminTop.exists)
 

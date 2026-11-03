@@ -12,6 +12,8 @@ const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const ADMIN_USER = process.env.SMOKE_ADMIN_USER || 'admin'
+const ADMIN_PASS = process.env.SMOKE_ADMIN_PASS || 'admin123'
 
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const DEBUG_PORT = 9687
@@ -147,7 +149,7 @@ const PROBE = `(() => {
   const login = await fetch(`${BASE}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' })
+    body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS })
   }).then((r) => r.json())
   const token = login?.data?.token
   if (!token) throw new Error('管理员登录失败，请确认后端已启动')
@@ -217,7 +219,7 @@ const PROBE = `(() => {
     await sleep(1200)
     await evaluate(`localStorage.setItem('fcdzy_admin_token', ${JSON.stringify(token)})`)
     await evaluate("localStorage.setItem('fcdzy_theme','light')")
-    await send('Page.navigate', { url: `${BASE}/admin` })
+    await send('Page.navigate', { url: `${BASE}/yzdcf` })
     for (let i = 0; i < 50; i++) {
       await sleep(400)
       if (await evaluate("!!document.querySelector('.stat-value') && !!document.querySelector('.trend-canvas canvas')")) break

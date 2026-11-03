@@ -34,7 +34,7 @@ async function handleSubmit() {
     await auth.login(form.username, form.password)
     ElMessage.success('登录成功')
     const redirect = route.query.redirect as string | undefined
-    router.push(redirect || '/admin')
+    router.push(redirect || '/yzdcf')
   } catch {
     // 错误提示由 api 层统一处理
   }
@@ -76,8 +76,7 @@ async function handleSubmit() {
       </el-form>
 
       <div class="footer">
-        <p>默认账号：admin / admin123</p>
-        <p>首次登录后请前往「账号设置」修改密码</p>
+        <p>仅站点管理员可登录</p>
       </div>
     </div>
   </div>

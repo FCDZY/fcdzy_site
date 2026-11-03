@@ -166,7 +166,7 @@ onMounted(loadAll)
       <template #header>
         <div class="head">
           <span class="head-title">专题信息</span>
-          <el-button text :icon="'Back'" @click="router.push('/admin/topics')">返回专题列表</el-button>
+          <el-button text :icon="'Back'" @click="router.push('/yzdcf/topics')">返回专题列表</el-button>
         </div>
       </template>
 

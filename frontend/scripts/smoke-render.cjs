@@ -6,6 +6,8 @@ const { execFileSync } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const ADMIN_USER = process.env.SMOKE_ADMIN_USER || 'admin'
+const ADMIN_PASS = process.env.SMOKE_ADMIN_PASS || 'admin123'
 
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const chromeCandidates = [
@@ -65,7 +67,7 @@ function appLength(html) {
   const list = await api('/api/public/articles?page=1&size=8')
   const topics = await api('/api/public/topics')
   const categories = await api('/api/public/categories')
-  const detail = await api('/api/public/articles/build-personal-site')
+  const detail = await api(`/api/public/articles/${list.list[0].slug}`)
 
   let failed = 0
   const run = (name, url, checks) => {
@@ -98,7 +100,7 @@ function appLength(html) {
     ['出现文章标题', html.includes(list.list[0].title)]
   ])
 
-  run('文章详情', '/article/build-personal-site', (html) => [
+  run('文章详情', `/article/${list.list[0].slug}`, (html) => [
     ['文章标题', html.includes(detail.title)],
     ['Markdown 正文', html.includes('markdown-body')],
     ['代码块', html.includes('<pre')],
@@ -119,9 +121,9 @@ function appLength(html) {
 
   run('关于页', '/about', (html) => [['作者名渲染', html.includes(config.authorName)]])
 
-  run('后台未登录跳转', '/admin', (html) => [
+  run('后台未登录跳转', '/yzdcf', (html) => [
     ['出现登录表单', html.includes('type="password"')],
-    ['默认账号提示', html.includes('admin123')],
+    ['不再暴露默认账号提示', !html.includes('admin123')],
     ['未进入后台菜单', !html.includes('站点配置')]
   ])
 

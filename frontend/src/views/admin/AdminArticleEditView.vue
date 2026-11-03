@@ -4,6 +4,8 @@ import { useRouter } from 'vue-router'
 import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
+// 让编辑器预览用本地打包的 mermaid（默认会去 unpkg CDN 拉，国内常常拉不到）
+import '@/composables/useMermaidEditor'
 import { adminApi, publicApi } from '@/api'
 import type { Article, ArticleForm, Category, Tag } from '@/types'
 import ImageUploader from '@/components/admin/ImageUploader.vue'
@@ -288,7 +290,7 @@ async function submit(status: 'DRAFT' | 'SCHEDULED' | 'PUBLISHED') {
     } else {
       ElMessage.success(status === 'PUBLISHED' ? '文章已发布' : '草稿已保存')
     }
-    router.push('/admin/articles')
+    router.push('/yzdcf/articles')
   } catch {
     // 提示由 api 层处理
   } finally {
@@ -368,7 +370,7 @@ onBeforeUnmount(() => {
       <template #header>
         <div class="head">
           <span class="head-title">{{ isEdit ? '编辑文章' : '写文章' }}</span>
-          <el-button text :icon="'Back'" @click="router.push('/admin/articles')">返回列表</el-button>
+          <el-button text :icon="'Back'" @click="router.push('/yzdcf/articles')">返回列表</el-button>
         </div>
       </template>
 
@@ -477,7 +479,7 @@ onBeforeUnmount(() => {
       </el-form>
 
       <div class="footer-bar">
-        <el-button @click="router.push('/admin/articles')">取消</el-button>
+        <el-button @click="router.push('/yzdcf/articles')">取消</el-button>
         <el-button :loading="submitting" @click="submit('DRAFT')">保存草稿</el-button>
 
         <!--

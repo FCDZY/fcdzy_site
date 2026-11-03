@@ -5,6 +5,9 @@ backend/uploads/
 backend/src/main/resources/application-local.yml
 # 数据库连接（真实账号密码），同样不进仓库
 backend/src/main/resources/application-db.yml
+# 私有配置放在 backend/config/（不打进 jar，部署走环境变量）
+backend/config/application-local.yml
+backend/config/application-db.yml
 *.jar
 *.war
 
@@ -31,3 +34,6 @@ logs/
 .env.local
 .env.*.local
 deploy/certs/
+
+start-backend.bat
+start-frontend.bat

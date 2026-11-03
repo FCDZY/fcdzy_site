@@ -91,6 +91,26 @@ const md = new MarkdownIt({
   highlight: renderCodeBlock
 })
 
+/** mermaid 代码块的「占位壳」：先把源码留在 DOM 里，前台再异步渲染成 SVG（失败也能看到源码） */
+function renderMermaidPlaceholder(code: string): string {
+  return `<div class="mermaid-block"><pre class="mermaid-src">${md.utils.escapeHtml(code)}</pre></div>`
+}
+
+/**
+ * 接管 fenced 代码块：
+ * - ```mermaid → 输出流程图占位块，由 useMermaid 异步渲染（懒加载 mermaid）
+ * - 其它语言 → 原来的高亮 + 行号 + 复制按钮
+ */
+md.renderer.rules.fence = (tokens, idx): string => {
+  const token = tokens[idx]
+  const info = (token.info || '').trim()
+  const lang = info.split(/\s+/)[0]?.toLowerCase() ?? ''
+  if (lang === 'mermaid') {
+    return renderMermaidPlaceholder(token.content)
+  }
+  return renderCodeBlock(token.content, lang)
+}
+
 export interface TocItem {
   id: string
   text: string

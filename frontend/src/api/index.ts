@@ -9,6 +9,7 @@ import type {
   Comment,
   CommentForm,
   LoginResult,
+  ProfileUpdateResult,
   PageResult,
   SiteConfig,
   Stats,
@@ -69,8 +70,8 @@ export const authApi = {
   me: () => request<AdminUser>({ url: '/auth/me', method: 'get' }),
   changePassword: (oldPassword: string, newPassword: string) =>
     request<void>({ url: '/auth/password', method: 'put', data: { oldPassword, newPassword } }),
-  updateProfile: (data: { nickname?: string; avatar?: string; email?: string }) =>
-    request<AdminUser>({ url: '/auth/profile', method: 'put', data })
+  updateProfile: (data: { username?: string; nickname?: string; avatar?: string; email?: string }) =>
+    request<ProfileUpdateResult>({ url: '/auth/profile', method: 'put', data })
 }
 
 /** 后台管理接口 */

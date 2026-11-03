@@ -4,16 +4,21 @@ import com.fcdzy.site.common.BizException;
 import com.fcdzy.site.dto.AdminUserDto;
 import com.fcdzy.site.dto.LoginRequest;
 import com.fcdzy.site.dto.LoginResponse;
+import com.fcdzy.site.dto.ProfileUpdateResponse;
 import com.fcdzy.site.entity.AdminUser;
 import com.fcdzy.site.repository.AdminUserRepository;
 import com.fcdzy.site.security.JwtService;
 import java.time.LocalDateTime;
+import java.util.regex.Pattern;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class AuthService {
+
+    /** 用户名规则：字母、数字、下划线、短横线，3-32 位 */
+    private static final Pattern USERNAME_PATTERN = Pattern.compile("^[A-Za-z0-9_-]{3,32}$");
 
     private final AdminUserRepository adminUserRepository;
     private final PasswordEncoder passwordEncoder;
@@ -60,15 +65,30 @@ public class AuthService {
     }
 
     @Transactional
-    public AdminUserDto updateProfile(String username, String nickname, String avatar, String email) {
+    public ProfileUpdateResponse updateProfile(String username, String newUsername, String nickname, String avatar, String email) {
         AdminUser user = adminUserRepository.findByUsername(username)
                 .orElseThrow(() -> BizException.unauthorized("登录状态已失效"));
+
+        String newToken = null;
+        if (newUsername != null && !newUsername.isBlank() && !newUsername.trim().equals(user.getUsername())) {
+            String target = newUsername.trim();
+            if (!USERNAME_PATTERN.matcher(target).matches()) {
+                throw new BizException("用户名只能包含字母、数字、下划线和短横线，长度 3-32 位");
+            }
+            if (adminUserRepository.findByUsername(target).isPresent()) {
+                throw new BizException("用户名「" + target + "」已被占用");
+            }
+            user.setUsername(target);
+            // JWT 的 subject 就是用户名：改名后旧 token 失效，这里直接签发新 token，前端替换即可保持登录
+            newToken = jwtService.generateToken(user.getId(), user.getUsername());
+        }
+
         if (nickname != null && !nickname.isBlank()) {
             user.setNickname(nickname.trim());
         }
         user.setAvatar(avatar);
         user.setEmail(email);
         adminUserRepository.save(user);
-        return AdminUserDto.of(user);
+        return new ProfileUpdateResponse(AdminUserDto.of(user), newToken);
     }
 }

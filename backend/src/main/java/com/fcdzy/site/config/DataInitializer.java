@@ -75,7 +75,10 @@ public class DataInitializer implements ApplicationRunner {
 
     private void initAdmin() {
         SiteProperties.Admin admin = siteProperties.getAdmin();
-        if (adminUserRepository.findByUsername(admin.getUsername()).isPresent()) {
+        // 只要库里已经存在任意管理员账号就不再新建。
+        // 注意：不能用「按配置里的用户名查」来判断——用户名可以在后台改掉，
+        // 那样一重启就会又建一个默认账号出来。
+        if (adminUserRepository.count() > 0) {
             return;
         }
         AdminUser user = new AdminUser();
@@ -83,7 +86,7 @@ public class DataInitializer implements ApplicationRunner {
         user.setPassword(passwordEncoder.encode(admin.getPassword()));
         user.setNickname(admin.getNickname());
         adminUserRepository.save(user);
-        log.info("已创建默认管理员账号：{} / {}（请登录后尽快修改密码）", admin.getUsername(), admin.getPassword());
+        log.info("已创建默认管理员账号：{}（密码取自配置，请登录后尽快修改）", admin.getUsername());
     }
 
     private void seedDemoContent() {

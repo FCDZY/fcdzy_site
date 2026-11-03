@@ -15,21 +15,21 @@ const router = useRouter()
 const collapsed = ref(false)
 
 const menus = [
-  { path: '/admin', label: '仪表盘', icon: 'Odometer' },
-  { path: '/admin/articles', label: '文章管理', icon: 'Document' },
-  { path: '/admin/categories', label: '分类管理', icon: 'FolderOpened' },
-  { path: '/admin/tags', label: '标签管理', icon: 'PriceTag' },
-  { path: '/admin/topics', label: '专题管理', icon: 'Collection' },
-  { path: '/admin/comments', label: '评论管理', icon: 'ChatDotRound' },
-  { path: '/admin/settings', label: '站点配置', icon: 'Setting' },
-  { path: '/admin/profile', label: '账号设置', icon: 'User' }
+  { path: '/yzdcf', label: '仪表盘', icon: 'Odometer' },
+  { path: '/yzdcf/articles', label: '文章管理', icon: 'Document' },
+  { path: '/yzdcf/categories', label: '分类管理', icon: 'FolderOpened' },
+  { path: '/yzdcf/tags', label: '标签管理', icon: 'PriceTag' },
+  { path: '/yzdcf/topics', label: '专题管理', icon: 'Collection' },
+  { path: '/yzdcf/comments', label: '评论管理', icon: 'ChatDotRound' },
+  { path: '/yzdcf/settings', label: '站点配置', icon: 'Setting' },
+  { path: '/yzdcf/profile', label: '账号设置', icon: 'User' }
 ]
 
 const activePath = computed(() => {
   const matched = menus
     .filter((menu) => route.path === menu.path || route.path.startsWith(`${menu.path}/`))
     .sort((a, b) => b.path.length - a.path.length)
-  return matched[0]?.path || '/admin'
+  return matched[0]?.path || '/yzdcf'
 })
 
 const pageTitle = computed(() => (route.meta?.title as string) || '后台管理')
@@ -61,7 +61,7 @@ async function handleLogout() {
 <template>
   <el-container class="admin-layout">
     <el-aside :width="collapsed ? '64px' : '212px'" class="aside">
-      <div class="aside-brand" @click="router.push('/admin')">
+      <div class="aside-brand" @click="router.push('/yzdcf')">
         <span class="dot">M</span>
         <span v-show="!collapsed" class="name">{{ site.siteName }} · 后台</span>
       </div>
@@ -94,7 +94,7 @@ async function handleLogout() {
             </span>
             <template #dropdown>
               <el-dropdown-menu>
-                <el-dropdown-item @click="router.push('/admin/profile')">账号设置</el-dropdown-item>
+                <el-dropdown-item @click="router.push('/yzdcf/profile')">账号设置</el-dropdown-item>
                 <el-dropdown-item divided @click="handleLogout">退出登录</el-dropdown-item>
               </el-dropdown-menu>
             </template>

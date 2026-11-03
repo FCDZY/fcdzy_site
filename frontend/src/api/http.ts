@@ -37,9 +37,9 @@ instance.interceptors.response.use(
     const message = error?.response?.data?.message || error.message || '请求失败'
     if (status === 401) {
       clearToken()
-      if (!location.pathname.startsWith('/admin/login')) {
+      if (!location.pathname.startsWith('/yzdcf/login')) {
         ElMessage.error('登录状态已过期，请重新登录')
-        location.href = '/admin/login'
+        location.href = '/yzdcf/login'
       }
     } else {
       ElMessage.error(message)

@@ -11,10 +11,12 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
+const { firstPublishedSlug } = require('./_helpers.cjs')
+
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const DEBUG_PORT = 9681
 const VIEW = { width: 1440, height: 900 }
-const ARTICLE_SLUG = 'build-personal-site'
+let ARTICLE_SLUG = process.env.SMOKE_ARTICLE || ''
 
 const chromeCandidates = [
   process.env.CHROME_PATH,
@@ -97,6 +99,7 @@ const PROBE = `(() => {
 })()`
 
 ;(async () => {
+  if (!ARTICLE_SLUG) ARTICLE_SLUG = await firstPublishedSlug()
   const profile = path.join(os.tmpdir(), 'dsh-smoke-progress-profile')
   const proc = spawn(
     chrome,
@@ -243,10 +246,22 @@ const PROBE = `(() => {
 
     // ===== 6. 内容不足一屏时保持 0 =====
     console.log('\n【需求 6】内容高度小于屏幕高度时保持 0')
-    await send('Emulation.setDeviceMetricsOverride', { width: VIEW.width, height: 6000, deviceScaleFactor: 1, mobile: false })
     await goto(articleUrl)
+    // 先按当前文档高度抬高视口，直到「内容不足一屏」真的成立（最多试 4 次）
+    for (let i = 0; i < 4; i++) {
+      const scrollable = await evaluate('document.documentElement.scrollHeight - window.innerHeight')
+      if (Number(scrollable) <= 0) break
+      const docHeight = await evaluate('document.documentElement.scrollHeight')
+      await send('Emulation.setDeviceMetricsOverride', {
+        width: VIEW.width,
+        height: Number(docHeight) + 1500,
+        deviceScaleFactor: 1,
+        mobile: false
+      })
+      await sleep(700)
+    }
     await evaluate("window.scrollTo({ top: 0, behavior: 'auto' })")
-    await sleep(600)
+    await sleep(500)
     const tall = await probe()
     check('该视口下页面已无滚动空间', tall.scrollable <= 0, `可滚动 ${tall.scrollable}px（文档 ${tall.scrollHeight} / 视口 ${tall.innerHeight}）`)
     check('进度保持 0（不显示满条）', Math.abs(tall.scale) < 0.001 && tall.wrapperOpacity === 0, `scaleX=${tall.scale}，opacity=${tall.wrapperOpacity}`)

@@ -118,7 +118,7 @@ async function handleDelete(row: Topic) {
 }
 
 function goSort(row: Topic) {
-  router.push('/admin/topics/' + row.id)
+  router.push('/yzdcf/topics/' + row.id)
 }
 
 onMounted(load)

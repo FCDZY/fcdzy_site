@@ -182,7 +182,7 @@ onMounted(() => {
 
         <div class="spacer" />
 
-        <el-button type="primary" :icon="'Plus'" @click="router.push('/admin/articles/new')">写文章</el-button>
+        <el-button type="primary" :icon="'Plus'" @click="router.push('/yzdcf/articles/new')">写文章</el-button>
       </div>
 
       <el-table v-loading="loading" :data="list" stripe style="width: 100%">

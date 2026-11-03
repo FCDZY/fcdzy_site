@@ -39,11 +39,11 @@ const cards: StatCard[] = [
 ]
 
 const shortcuts = [
-  { label: '写文章', path: '/admin/articles/new', icon: 'EditPen', primary: true },
-  { label: '分类管理', path: '/admin/categories', icon: 'FolderOpened', primary: false },
-  { label: '标签管理', path: '/admin/tags', icon: 'PriceTag', primary: false },
-  { label: '专题管理', path: '/admin/topics', icon: 'Collection', primary: false },
-  { label: '站点配置', path: '/admin/settings', icon: 'Setting', primary: false }
+  { label: '写文章', path: '/yzdcf/articles/new', icon: 'EditPen', primary: true },
+  { label: '分类管理', path: '/yzdcf/categories', icon: 'FolderOpened', primary: false },
+  { label: '标签管理', path: '/yzdcf/tags', icon: 'PriceTag', primary: false },
+  { label: '专题管理', path: '/yzdcf/topics', icon: 'Collection', primary: false },
+  { label: '站点配置', path: '/yzdcf/settings', icon: 'Setting', primary: false }
 ]
 
 const statusMap = {
@@ -115,7 +115,7 @@ onMounted(load)
     <section class="panel">
       <header class="panel-head">
         <h2 class="panel-title">最近更新</h2>
-        <el-button text type="primary" @click="router.push('/admin/articles')">查看全部</el-button>
+        <el-button text type="primary" @click="router.push('/yzdcf/articles')">查看全部</el-button>
       </header>
 
       <el-table :data="recent" stripe class="recent-table" style="width: 100%">

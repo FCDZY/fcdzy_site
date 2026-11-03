@@ -7,6 +7,8 @@ const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const ADMIN_USER = process.env.SMOKE_ADMIN_USER || 'admin'
+const ADMIN_PASS = process.env.SMOKE_ADMIN_PASS || 'admin123'
 
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const API = process.env.SMOKE_API || 'http://127.0.0.1:8080'
@@ -139,17 +141,17 @@ const isLightColor = (v) => brightness(v) > 150
     const pageReady = "!!document.querySelector('#app') && document.querySelector('#app').innerHTML.length > 800"
 
     // 1) 登录页（先清掉上次运行残留的 token，保证看到真正的登录页）
-    await navigate(`${BASE}/admin/login`, "!!document.querySelector('#app')")
+    await navigate(`${BASE}/yzdcf/login`, "!!document.querySelector('#app')")
     await evaluate('localStorage.clear()')
-    await navigate(`${BASE}/admin/login`, pageReady)
+    await navigate(`${BASE}/yzdcf/login`, pageReady)
     const loginHtml = await html()
-    console.log('后台登录页 (/admin/login)')
+    console.log('后台登录页 (/yzdcf/login)')
     check('渲染登录表单', loginHtml.includes('type="password"'))
-    check('提示默认账号', loginHtml.includes('admin123'))
+    check('不再暴露默认账号提示', !loginHtml.includes('admin123'))
 
     // 2) 通过接口登录并把 JWT 写入 localStorage（与前端同一 key）
     const token = await evaluate(
-      `fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'admin123' }) })
+      `fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: '${ADMIN_USER}', password: '${ADMIN_PASS}' }) })
         .then(r => r.json()).then(d => { localStorage.setItem('fcdzy_admin_token', d.data.token); return d.data.token })`,
       true
     )
@@ -162,17 +164,24 @@ const isLightColor = (v) => brightness(v) > 150
     const siteConfig = await (
       await fetch(`${API}/api/admin/site-config`, { headers: { Authorization: `Bearer ${token}` } })
     ).json()
-    const topicDetail = await (
-      await fetch(`${API}/api/admin/topics/1`, { headers: { Authorization: `Bearer ${token}` } })
+
+    // 文章 / 专题 id 不能写死：用接口返回的第一条，避免数据变动后误报
+    const sampleArticle = (articles.data?.list || [])[0]
+    const topicList = await (
+      await fetch(`${API}/api/admin/topics`, { headers: { Authorization: `Bearer ${token}` } })
     ).json()
+    const sampleTopic = (topicList.data || [])[0]
+    const topicDetail = sampleTopic
+      ? await (await fetch(`${API}/api/admin/topics/${sampleTopic.id}`, { headers: { Authorization: `Bearer ${token}` } })).json()
+      : { data: { topic: null } }
 
     // 可选：以深色模式跑一遍后台（SMOKE_THEME=dark）
     const darkMode = process.env.SMOKE_THEME === 'dark'
     if (darkMode) {
-      // 先清掉 token，否则 /admin/login 会被路由守卫重定向回仪表盘（读不到登录卡片）
+      // 先清掉 token，否则 /yzdcf/login 会被路由守卫重定向回仪表盘（读不到登录卡片）
       await evaluate("localStorage.removeItem('fcdzy_admin_token')")
       await evaluate("localStorage.setItem('fcdzy_theme', 'dark')")
-      await navigate(`${BASE}/admin/login`, pageReady)
+      await navigate(`${BASE}/yzdcf/login`, pageReady)
       console.log('\n深色模式后台（SMOKE_THEME=dark）')
       const probe = `JSON.stringify({
         isDark: document.documentElement.classList.contains('dark'),
@@ -192,9 +201,9 @@ const isLightColor = (v) => brightness(v) > 150
     }
 
     // 3) 仪表盘
-    await navigate(`${BASE}/admin`, pageReady)
+    await navigate(`${BASE}/yzdcf`, pageReady)
     let dom = await html()
-    console.log('\n仪表盘 (/admin)')
+    console.log('\n仪表盘 (/yzdcf)')
     check('侧边菜单渲染', hasText(dom, '文章管理') && hasText(dom, '站点配置'))
     check('统计数字渲染', hasText(dom, String(stats.data.articleCount)))
     check('最近更新表格有条目', hasText(dom, articles.data.list[0].title))
@@ -221,16 +230,16 @@ const isLightColor = (v) => brightness(v) > 150
       check('表格同步深色', isDarkColor(dashDark.tableBg), dashDark.tableBg)
       check('菜单文字为浅色', isLightColor(dashDark.menuText), dashDark.menuText)
       if (process.env.SMOKE_SHOT) {
-        await navigate(`${BASE}/admin`, pageReady)
+        await navigate(`${BASE}/yzdcf`, pageReady)
         const shot = await send('Page.captureScreenshot', { format: 'png' })
         if (shot.result?.data) fs.writeFileSync(`${process.env.SMOKE_SHOT}-admin-dashboard.png`, Buffer.from(shot.result.data, 'base64'))
       }
     }
 
     // 4) 文章管理
-    await navigate(`${BASE}/admin/articles`, pageReady)
+    await navigate(`${BASE}/yzdcf/articles`, pageReady)
     dom = await html()
-    console.log('\n文章管理 (/admin/articles)')
+    console.log('\n文章管理 (/yzdcf/articles)')
     check('表格渲染文章标题', hasText(dom, articles.data.list[0].title))
     check('显示状态标签', hasText(dom, '已发布') || hasText(dom, '草稿'))
     check('写文章入口', hasText(dom, '写文章'))
@@ -238,11 +247,19 @@ const isLightColor = (v) => brightness(v) > 150
     if (consoleErrors.length) console.log('    错误:', consoleErrors.slice(0, 3))
 
     // 5) 文章编辑（Markdown 编辑器）
-    await navigate(`${BASE}/admin/articles/1/edit`, "!!document.querySelector('.md-editor')")
+    await navigate(`${BASE}/yzdcf/articles/${sampleArticle.id}/edit`, "!!document.querySelector('.md-editor')")
     dom = await html()
-    console.log('\n文章编辑 (/admin/articles/1/edit)')
+    console.log(`\n文章编辑 (/yzdcf/articles/${sampleArticle.id}/edit)`)
     check('Markdown 编辑器挂载', hasText(dom, 'md-editor'))
-    check('标题回填', hasText(dom, articles.data.list.find((a) => a.id === 1)?.title || '###'))
+    // 表单是异步回填的，轮询等待标题输入框拿到值（最多 4 秒）
+    // 注意：el-input 的 value 是 DOM 属性，不在 outerHTML 里，必须直接读 .value
+    const readTitle = () => evaluate("(document.querySelector('.el-form-item input.el-input__inner') || {}).value || ''")
+    let titleValue = await readTitle()
+    for (let i = 0; i < 20 && titleValue !== sampleArticle.title; i++) {
+      await sleep(200)
+      titleValue = await readTitle()
+    }
+    check('标题回填', titleValue === sampleArticle.title, `${titleValue} / 期望 ${sampleArticle.title}`)
     check(
       '三个动作按钮（保存草稿 / 设置定时发布 / 立即发布）',
       hasText(dom, '保存草稿') && hasText(dom, '设置定时发布') && hasText(dom, '立即发布')
@@ -250,32 +267,41 @@ const isLightColor = (v) => brightness(v) > 150
     check('无控制台报错', consoleErrors.length === 0)
     if (consoleErrors.length) console.log('    错误:', consoleErrors.slice(0, 3))
 
-    // 6) 专题排序
-    await navigate(`${BASE}/admin/topics/1`, pageReady)
-    dom = await html()
-    console.log('\n专题排序 (/admin/topics/1)')
-    check('专题名回填', hasText(dom, topicDetail.data.topic.name))
-    check('已选文章按序显示', hasText(dom, topicDetail.data.articles[0].title))
-    check('保存排序按钮', hasText(dom, '保存排序'))
-    check('无控制台报错', consoleErrors.length === 0)
-    if (consoleErrors.length) console.log('    错误:', consoleErrors.slice(0, 3))
+    // 6) 专题排序（若无专题则跳过）
+    if (sampleTopic) {
+      await navigate(`${BASE}/yzdcf/topics/${sampleTopic.id}`, pageReady)
+      dom = await html()
+      console.log(`\n专题排序 (/yzdcf/topics/${sampleTopic.id})`)
+      check('专题名回填', hasText(dom, topicDetail.data.topic.name))
+      const topicArticles = topicDetail.data.articles || []
+      if (topicArticles.length) {
+        check('已选文章按序显示', hasText(dom, topicArticles[0].title))
+      } else {
+        console.log('  [SKIP] 该专题下暂无文章，跳过「已选文章按序显示」')
+      }
+      check('保存排序按钮', hasText(dom, '保存排序'))
+      check('无控制台报错', consoleErrors.length === 0)
+      if (consoleErrors.length) console.log('    错误:', consoleErrors.slice(0, 3))
+    } else {
+      console.log('\n专题排序：当前没有专题，跳过')
+    }
 
     // 7) 分类 / 标签 / 站点配置 / 账号设置
-    await navigate(`${BASE}/admin/categories`, pageReady)
+    await navigate(`${BASE}/yzdcf/categories`, pageReady)
     dom = await html()
-    console.log('\n分类管理 (/admin/categories)')
+    console.log('\n分类管理 (/yzdcf/categories)')
     check('分类列表渲染', hasText(dom, '技术笔记'))
     check('无控制台报错', consoleErrors.length === 0)
 
-    await navigate(`${BASE}/admin/tags`, pageReady)
+    await navigate(`${BASE}/yzdcf/tags`, pageReady)
     dom = await html()
-    console.log('\n标签管理 (/admin/tags)')
+    console.log('\n标签管理 (/yzdcf/tags)')
     check('标签列表渲染', hasText(dom, 'SpringBoot'))
     check('无控制台报错', consoleErrors.length === 0)
 
-    await navigate(`${BASE}/admin/settings`, pageReady)
+    await navigate(`${BASE}/yzdcf/settings`, pageReady)
     dom = await html()
-    console.log('\n站点配置 (/admin/settings)')
+    console.log('\n站点配置 (/yzdcf/settings)')
     check('已移除「站点名称」表单项', !hasText(dom, '站点名称'))
     check('已移除「站点副标题」表单项', !hasText(dom, '站点副标题'))
     check('已移除「站点 Logo」表单项', !hasText(dom, '站点 Logo'))
@@ -300,9 +326,9 @@ const isLightColor = (v) => brightness(v) > 150
     )
     check('无控制台报错', consoleErrors.length === 0)
 
-    await navigate(`${BASE}/admin/profile`, pageReady)
+    await navigate(`${BASE}/yzdcf/profile`, pageReady)
     dom = await html()
-    console.log('\n账号设置 (/admin/profile)')
+    console.log('\n账号设置 (/yzdcf/profile)')
     check('显示管理员用户名', hasText(dom, 'admin'))
     check('改密表单', hasText(dom, '新密码'))
     check('无控制台报错', consoleErrors.length === 0)

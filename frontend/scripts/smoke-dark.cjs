@@ -8,11 +8,13 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
+const { firstPublishedSlug, firstArticleWithCode } = require('./_helpers.cjs')
+
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const API = process.env.SMOKE_API || 'http://127.0.0.1:8080'
 const DEBUG_PORT = 9777
 const VIEW = { width: 1440, height: 900 }
-const ARTICLE_SLUG = process.env.SMOKE_ARTICLE || 'build-personal-site'
+let ARTICLE_SLUG = process.env.SMOKE_ARTICLE || ''
 
 const chromeCandidates = [
   process.env.CHROME_PATH,
@@ -88,7 +90,9 @@ const PAGE_PROBE = `(() => {
 
 const CODE_PROBE = `(() => {
   const cs = (el, pseudo) => (el ? getComputedStyle(el, pseudo || undefined) : null)
-  const pre = document.querySelector('.markdown-body pre.hljs')
+  // 优先取「带语言标记」的代码块：首块可能是没有语言标记的裸围栏，没有 ::before 语言标签
+  const allPres = Array.from(document.querySelectorAll('.markdown-body pre.hljs'))
+  const pre = allPres.find((p) => p.getAttribute('data-lang')) || allPres[0] || null
   const code = pre ? pre.querySelector('code') : null
   const lines = pre ? Array.from(pre.querySelectorAll('.code-line')) : []
   const button = pre ? pre.querySelector('.code-copy') : null
@@ -119,6 +123,15 @@ const CODE_PROBE = `(() => {
 })()`
 
 ;(async () => {
+  if (!ARTICLE_SLUG) {
+    // 深色主题要检查代码高亮与语言标签，优先选「正文带代码块」的文章
+    try {
+      const withCode = await firstArticleWithCode()
+      ARTICLE_SLUG = withCode.slug
+    } catch {
+      ARTICLE_SLUG = await firstPublishedSlug()
+    }
+  }
   const profile = path.join(os.tmpdir(), 'dsh-smoke-dark-profile')
   const proc = spawn(
     chrome,
@@ -269,7 +282,13 @@ const CODE_PROBE = `(() => {
       catch (e) { window.__clipboardStubError = String(e) }
     `)
     // 代码块通常在折叠线以下，先滚动到可视区域再点击
-    await evaluate("document.querySelector('.markdown-body pre.hljs .code-copy').scrollIntoView({ block: 'center' })")
+    // 必须滚动到「探针里选中的那一块」代码的复制按钮，否则坐标对不上（首块可能没有语言标记）
+    await evaluate(`(() => {
+      const pres = Array.from(document.querySelectorAll('.markdown-body pre.hljs'))
+      const pre = pres.find((p) => p.getAttribute('data-lang')) || pres[0]
+      const btn = pre && pre.querySelector('.code-copy')
+      if (btn) btn.scrollIntoView({ block: 'center' })
+    })()`)
     await sleep(500)
     const darkCode = await probe(CODE_PROBE)
 

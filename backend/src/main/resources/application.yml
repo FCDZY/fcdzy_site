@@ -7,13 +7,16 @@ spring:
     name: fcdzy-site
 
   # ===== 私有配置（都不进仓库，见 .gitignore）=====
-  # application-db.yml  ：数据库连接（url / 用户名 / 密码）
-  # application-local.yml：第三方密钥（JWT 密钥、SMTP 授权码、OSS AccessKey、初始管理员密码）
-  # 两份文件都配置成 optional：缺失时用下面的占位符/默认值，缺失时记得按 README 补上。
+  # 放在 backend/config/ 下（不是 resources，所以不会被打进 jar，也就不会覆盖部署时的环境变量）：
+  #   config/application-db.yml    ：数据库连接（url / 用户名 / 密码）
+  #   config/application-local.yml ：第三方密钥（JWT 密钥、SMTP 授权码、OSS AccessKey、初始管理员密码）
+  # 都写了 optional：缺失也能启动。部署时这些值全部走环境变量（DB_* / JWT_SECRET / OSS_* ...）。
   config:
     import:
       - optional:classpath:application-db.yml
       - optional:classpath:application-local.yml
+      - optional:file:./config/application-db.yml
+      - optional:file:./config/application-local.yml
 
   # ===== 邮件（评论通知）=====
   # 授权码属于敏感信息，只写在 application-local.yml 的 spring.mail.password

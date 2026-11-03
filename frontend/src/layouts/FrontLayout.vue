@@ -28,7 +28,15 @@ const showHeader = computed(() => route.name !== 'home')
         <p class="links">
           <a v-if="site.config.githubUrl" :href="site.config.githubUrl" target="_blank" rel="noopener">GitHub</a>
           <a v-if="site.config.email" :href="`mailto:${site.config.email}`">邮箱</a>
-          <span v-if="site.config.icp">{{ site.config.icp }}</span>
+          <a
+            v-if="site.config.icp"
+            class="icp-link"
+            href="https://beian.miit.gov.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+            title="工业和信息化部政务服务平台 · 备案查询"
+            >{{ site.config.icp }}</a
+          >
         </p>
         <p class="copyright">© {{ site.config.startYear || year }} - {{ year }} {{ site.siteName }}</p>
       </div>
@@ -82,6 +90,16 @@ const showHeader = computed(() => route.name !== 'home')
 
 .site-footer a:hover {
   color: var(--brand-dark);
+}
+
+/* 备案号：外表保持页脚同款文字，hover 时给下划线提示可点击 */
+.icp-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.icp-link:hover {
+  text-decoration: underline;
 }
 
 .copyright {

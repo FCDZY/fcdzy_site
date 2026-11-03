@@ -10,6 +10,8 @@ const { spawn } = require('node:child_process')
 const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
+const ADMIN_USER = process.env.SMOKE_ADMIN_USER || 'admin'
+const ADMIN_PASS = process.env.SMOKE_ADMIN_PASS || 'admin123'
 
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const API = process.env.SMOKE_API || 'http://127.0.0.1:8080'
@@ -139,7 +141,7 @@ async function apiLogin() {
   const res = await fetch(`${API}/api/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ username: 'admin', password: 'admin123' })
+    body: JSON.stringify({ username: ADMIN_USER, password: ADMIN_PASS })
   })
   return (await res.json()).data.token
 }
@@ -259,11 +261,11 @@ async function articleTotal(token) {
     // 登录并进入新建文章页
     await goto(`${BASE}/`, "!!document.querySelector('#app')")
     await evaluate(
-      `fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: 'admin', password: 'admin123' }) })
+      `fetch('/api/auth/login', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: '${ADMIN_USER}', password: '${ADMIN_PASS}' }) })
         .then(r => r.json()).then(d => localStorage.setItem('fcdzy_admin_token', d.data.token))`
     )
     await evaluate("localStorage.removeItem('fcdzy_theme'); localStorage.setItem('fcdzy_theme','light'); document.documentElement.classList.remove('dark')")
-    await goto(`${BASE}/admin/articles/new`, "!!document.querySelector('.md-editor')")
+    await goto(`${BASE}/yzdcf/articles/new`, "!!document.querySelector('.md-editor')")
 
     const initial = await probe()
     console.log('【需求 1】导入入口与文件类型限制')

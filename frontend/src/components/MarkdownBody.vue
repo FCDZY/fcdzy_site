@@ -1,6 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { codeTextOf, renderMarkdown } from '@/composables/useMarkdown'
+import { renderMermaidBlocks } from '@/composables/useMermaid'
+import { useTheme } from '@/composables/useTheme'
 import ArticleToc from '@/components/ArticleToc.vue'
 
 const props = withDefaults(
@@ -14,6 +16,26 @@ const props = withDefaults(
 const result = computed(() => renderMarkdown(props.content))
 /** 目录项：正文提取出的 h1 / h2 / h3 */
 const toc = computed(() => result.value.toc)
+
+const bodyRef = ref<HTMLElement>()
+const { theme } = useTheme()
+
+/** 把正文里的 mermaid 代码块渲染成流程图（只有出现 .mermaid-block 时才会去加载 mermaid） */
+function paintMermaid(force = false) {
+  renderMermaidBlocks(bodyRef.value, theme.value, force)
+}
+
+onMounted(() => {
+  nextTick(() => paintMermaid())
+})
+
+watch(
+  () => result.value.html,
+  () => nextTick(() => paintMermaid())
+)
+
+// 切换深色/浅色时用对应主题重新渲染，否则流程图配色会和页面不搭
+watch(theme, () => nextTick(() => paintMermaid(true)))
 
 /** 复制代码（事件委托，代码块由 v-html 渲染） */
 async function handleClick(event: MouseEvent) {
@@ -60,12 +82,53 @@ async function handleClick(event: MouseEvent) {
   <div class="markdown-wrap">
     <!-- 悬浮目录（自动提取 h1/h2/h3，滚动高亮、可收起） -->
     <ArticleToc v-if="props.showToc && toc.length" :items="toc" />
-    <div class="markdown-body" v-html="result.html" @click="handleClick"></div>
+    <div ref="bodyRef" class="markdown-body" v-html="result.html" @click="handleClick"></div>
   </div>
 </template>
 
 <style scoped>
 .markdown-wrap {
   display: block;
+}
+
+/* ===== mermaid 流程图 ===== */
+.markdown-body :deep(.mermaid-block) {
+  margin: 1.1em 0;
+  padding: 14px 12px;
+  overflow-x: auto;
+  text-align: center;
+  border: 1px solid var(--code-border);
+  border-radius: 10px;
+  background: var(--code-bg);
+}
+
+.markdown-body :deep(.mermaid-block svg) {
+  max-width: 100%;
+  height: auto;
+}
+
+/* 渲染前/渲染失败时显示的源码：弱化，不抢正文视觉 */
+.markdown-body :deep(.mermaid-block .mermaid-src) {
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: none;
+  overflow-x: auto;
+  text-align: left;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--text-3);
+}
+
+.markdown-body :deep(.mermaid-block.is-rendered .mermaid-src) {
+  display: none;
+}
+
+.markdown-body :deep(.mermaid-block .mermaid-error-tip) {
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  color: #e6a23c;
 }
 </style>

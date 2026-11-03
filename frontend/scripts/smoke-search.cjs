@@ -11,11 +11,13 @@ const fs = require('node:fs')
 const os = require('node:os')
 const path = require('node:path')
 
+const { contentOnlyKeyword } = require('./_helpers.cjs')
+
 const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const DEBUG_PORT = 9671
 const VIEW = { width: 1440, height: 900 }
-/** 只出现在文章正文里的关键词（标题、简介都没有），用来证明正文也被检索 */
-const CONTENT_ONLY = 'RestController'
+/** 只出现在文章正文里的关键词（标题、简介都没有），用来证明正文也被检索；运行时从现有文章中动态取 */
+let CONTENT_ONLY = 'RestController'
 
 const chromeCandidates = [
   process.env.CHROME_PATH,
@@ -98,6 +100,7 @@ const PROBE = `(() => {
 })()`
 
 ;(async () => {
+  CONTENT_ONLY = (await contentOnlyKeyword()) || CONTENT_ONLY
   const profile = path.join(os.tmpdir(), 'dsh-smoke-search-profile')
   const proc = spawn(
     chrome,
@@ -254,7 +257,7 @@ const PROBE = `(() => {
     check('输入内容已进入输入框', (await evaluate("document.querySelector('.site-search .search-input').value")) === CONTENT_ONLY, CONTENT_ONLY)
     await pressEnter()
     const afterEnter = await probe()
-    check('回车后跳转到文章列表并带上关键词', afterEnter.path === `/articles?keyword=${CONTENT_ONLY}` && afterEnter.keywordParam === CONTENT_ONLY, `${afterEnter.path}（keyword=${afterEnter.keywordParam}）`)
+    check('回车后跳转到文章列表并带上关键词', decodeURIComponent(afterEnter.path) === `/articles?keyword=${CONTENT_ONLY}` && afterEnter.keywordParam === CONTENT_ONLY, `${afterEnter.path}（keyword=${afterEnter.keywordParam}）`)
     check('结果为正文命中的文章（证明正文参与检索）', afterEnter.cardCount >= 1, `${afterEnter.cardCount} 条：${afterEnter.titles.join(' / ')}`)
 
     // ================= 点击图标触发 =================

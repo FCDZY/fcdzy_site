@@ -35,13 +35,13 @@ const routes: RouteRecordRaw[] = [
     ]
   },
   {
-    path: '/admin/login',
+    path: '/yzdcf/login',
     name: 'admin-login',
     component: () => import('@/views/admin/LoginView.vue'),
     meta: { title: '管理员登录' }
   },
   {
-    path: '/admin',
+    path: '/yzdcf',
     component: () => import('@/layouts/AdminLayout.vue'),
     children: [
       { path: '', name: 'admin-dashboard', component: () => import('@/views/admin/DashboardView.vue'), meta: { title: '仪表盘' } },
@@ -82,7 +82,7 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
-  const needsAuth = to.path.startsWith('/admin') && to.name !== 'admin-login'
+  const needsAuth = to.path.startsWith('/yzdcf') && to.name !== 'admin-login'
   if (needsAuth && !getToken()) {
     return { name: 'admin-login', query: { redirect: to.fullPath } }
   }

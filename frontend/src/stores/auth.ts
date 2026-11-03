@@ -30,11 +30,24 @@ export const useAuthStore = defineStore('auth', () => {
     return user.value
   }
 
+  /**
+   * 保存资料后同步登录态。
+   * 改过用户名时后端会返回新 token（旧 token 的 subject 已失效），这里一并替换，避免被踢下线。
+   */
+  function applyProfile(result: { user: AdminUser; token?: string | null }) {
+    user.value = result.user
+    if (result.token) {
+      token.value = result.token
+      setToken(result.token)
+    }
+    return result
+  }
+
   function logout() {
     token.value = ''
     user.value = null
     clearToken()
   }
 
-  return { token, user, loading, isLoggedIn, login, fetchMe, logout }
+  return { token, user, loading, isLoggedIn, login, fetchMe, applyProfile, logout }
 })

@@ -90,6 +90,12 @@ export interface LoginResult {
   user: AdminUser
 }
 
+/** 保存资料的结果：改过用户名时后端会附带一个新 token（旧 token 因 subject 变化而失效） */
+export interface ProfileUpdateResult {
+  user: AdminUser
+  token?: string | null
+}
+
 export interface Stats {
   articleCount: number
   publishedCount: number

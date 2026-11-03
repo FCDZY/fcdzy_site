@@ -4,6 +4,7 @@ import com.fcdzy.site.common.ApiResponse;
 import com.fcdzy.site.dto.AdminUserDto;
 import com.fcdzy.site.dto.LoginRequest;
 import com.fcdzy.site.dto.LoginResponse;
+import com.fcdzy.site.dto.ProfileUpdateResponse;
 import com.fcdzy.site.service.AuthService;
 import jakarta.validation.Valid;
 import java.util.Map;
@@ -43,8 +44,8 @@ public class AuthController {
     }
 
     @PutMapping("/profile")
-    public ApiResponse<AdminUserDto> updateProfile(Authentication authentication, @RequestBody Map<String, String> body) {
+    public ApiResponse<ProfileUpdateResponse> updateProfile(Authentication authentication, @RequestBody Map<String, String> body) {
         return ApiResponse.ok(authService.updateProfile(authentication.getName(),
-                body.get("nickname"), body.get("avatar"), body.get("email")));
+                body.get("username"), body.get("nickname"), body.get("avatar"), body.get("email")));
     }
 }

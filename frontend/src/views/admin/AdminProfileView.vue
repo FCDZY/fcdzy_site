@@ -7,6 +7,7 @@ import { useAuthStore } from '@/stores/auth'
 import ImageUploader from '@/components/admin/ImageUploader.vue'
 
 interface ProfileForm {
+  username: string
   nickname: string
   email: string
   avatar: string
@@ -29,6 +30,7 @@ const profileRef = ref<FormInstance>()
 const passwordRef = ref<FormInstance>()
 
 const profile = reactive<ProfileForm>({
+  username: '',
   nickname: '',
   email: '',
   avatar: ''
@@ -60,6 +62,15 @@ const confirmValidator: FormItemRule['validator'] = (_rule, value, callback) => 
 }
 
 const profileRules: FormRules<ProfileForm> = {
+  username: [
+    { required: true, message: '请输入用户名', trigger: 'blur' },
+    { min: 3, max: 32, message: '用户名长度 3-32 位', trigger: 'blur' },
+    {
+      pattern: /^[A-Za-z0-9_-]+$/,
+      message: '只能包含字母、数字、下划线和短横线',
+      trigger: 'blur'
+    }
+  ],
   nickname: [{ max: 30, message: '昵称最多 30 个字符', trigger: 'blur' }],
   email: [{ validator: emailValidator, trigger: 'blur' }]
 }
@@ -77,6 +88,7 @@ const passwordRules: FormRules<PasswordForm> = {
 }
 
 function fillProfile() {
+  profile.username = auth.user?.username || ''
   profile.nickname = auth.user?.nickname || ''
   profile.email = auth.user?.email || ''
   profile.avatar = auth.user?.avatar || ''
@@ -104,16 +116,24 @@ async function saveProfile() {
   if (!profileRef.value) return
   const valid = await profileRef.value.validate().catch(() => false)
   if (!valid) return
+  const oldUsername = auth.user?.username || ''
+  const nextUsername = profile.username.trim()
   savingProfile.value = true
   try {
-    await authApi.updateProfile({
+    const result = await authApi.updateProfile({
+      username: nextUsername,
       nickname: profile.nickname.trim(),
       email: profile.email.trim(),
       avatar: profile.avatar.trim()
     })
-    await auth.fetchMe()
+    // 改过用户名时后端会带新 token，替换掉本地旧 token，避免被踢回登录页
+    auth.applyProfile(result)
     fillProfile()
-    ElMessage.success('资料已保存')
+    if (nextUsername !== oldUsername) {
+      ElMessage.success(`用户名已改为「${nextUsername}」，请用新用户名登录`)
+    } else {
+      ElMessage.success('资料已保存')
+    }
   } catch {
     // 提示由 api 层处理
   } finally {
@@ -151,8 +171,14 @@ onMounted(load)
           </template>
 
           <el-form ref="profileRef" :model="profile" :rules="profileRules" label-width="90px" label-position="top">
-            <el-form-item label="用户名">
-              <el-input :model-value="auth.user?.username || ''" disabled placeholder="用户名不可修改" />
+            <el-form-item label="用户名" prop="username">
+              <el-input
+                v-model="profile.username"
+                placeholder="登录用，3-32 位字母/数字/下划线/短横线"
+                maxlength="32"
+                clearable
+              />
+              <div class="tip">修改后请记住新用户名；保存时会自动续签登录状态，不会掉线。</div>
             </el-form-item>
             <el-form-item label="昵称" prop="nickname">
               <el-input v-model="profile.nickname" placeholder="显示在后台与文章作者处" maxlength="30" clearable />
