@@ -307,19 +307,41 @@ const PROBE = `(() => {
     check('按钮在标题下方', initial.jumpBtn && initial.titleRect && initial.jumpBtn.rect.top > initial.titleRect.top, `标题 top=${initial.titleRect?.top} 按钮 top=${initial.jumpBtn?.rect.top}`)
     check('评论区有可定位的 id', initial.hasCommentsId)
 
-    // 回到顶部后点按钮：立刻读一次 scrollY（应在起始与终点之间，说明是平滑滚动而不是瞬间跳）
+    // 回到顶部后点按钮，并在页面内用 rAF 采样滚动位置：
+    // 平滑滚动是动画，用 CDP 往返采样（间隔十几毫秒）很容易整段错过，造成假失败。
     await evaluate("window.scrollTo({ top: 0, behavior: 'auto' })")
     await sleep(400)
-    const scrollBefore = await evaluate('Math.round(window.scrollY)')
-    await clickEl('.jump-comments')
-    await sleep(120)
-    const scrollMid = await evaluate('Math.round(window.scrollY)')
-    await sleep(1600)
+    const scrollBefore = Number(await evaluate('Math.round(window.scrollY)'))
+    const samplesJson = await evaluate(`(() => new Promise((resolve) => {
+      const out = []
+      const btn = document.querySelector('.jump-comments')
+      if (btn) btn.click()
+      const start = performance.now()
+      const step = () => {
+        out.push(Math.round(window.scrollY))
+        if (performance.now() - start < 800) requestAnimationFrame(step)
+        else resolve(JSON.stringify(out))
+      }
+      requestAnimationFrame(step)
+    }))()`)
+    const samples = JSON.parse(samplesJson || '[]')
+    await sleep(600)
     const afterJump = await probe()
     const sectionTop = afterJump.sectionRect ? afterJump.sectionRect.top : 9999
     check('点击后确实滚动到了页面下方', scrollBefore < 100 && afterJump.scrollY > scrollBefore + 200, `${scrollBefore} → ${afterJump.scrollY}`)
     check('评论区停在视口顶部附近（或页面已滚到底）', sectionTop >= -2 && (sectionTop <= 60 || afterJump.atBottom), `评论区 top=${sectionTop}，是否到底=${afterJump.atBottom}`)
-    check('是平滑滚动（中途位置在起止之间）', scrollMid > scrollBefore && scrollMid < afterJump.scrollY, `起点 ${scrollBefore} / 中途 ${scrollMid} / 终点 ${afterJump.scrollY}`)
+    const jumpDistance = afterJump.scrollY - scrollBefore
+    const hasMidFrame = samples.some((v) => v > scrollBefore && v < afterJump.scrollY)
+    if (jumpDistance < 200) {
+      // 距离太短，浏览器可能在一帧内就滚完，此时无法区分"平滑"和"瞬间"
+      console.log(`  [SKIP] 滚动距离仅 ${jumpDistance}px，跳过平滑滚动判定`)
+    } else {
+      check(
+        '是平滑滚动（中途位置在起止之间）',
+        hasMidFrame,
+        `起点 ${scrollBefore} / 采样 [${samples.slice(0, 8).join(',')}…] / 终点 ${afterJump.scrollY}`
+      )
+    }
 
     console.log('\n【需求 2】提交表单：昵称 + 邮箱 + 内容')
     check('有昵称与邮箱两个输入框', initial.inputCount === 2, `${initial.inputCount} 个`)

@@ -37,9 +37,25 @@ watch(
 // 切换深色/浅色时用对应主题重新渲染，否则流程图配色会和页面不搭
 watch(theme, () => nextTick(() => paintMermaid(true)))
 
+/** 长代码折叠/展开（事件委托，代码块由 v-html 渲染） */
+function toggleFold(button: HTMLElement) {
+  const wrap = button.closest('.code-wrap') as HTMLElement | null
+  if (!wrap) return
+  const collapsed = wrap.classList.toggle('is-collapsed')
+  const total = wrap.dataset.lines || ''
+  button.textContent = collapsed ? `展开全部 ${total} 行` : '收起'
+}
+
 /** 复制代码（事件委托，代码块由 v-html 渲染） */
 async function handleClick(event: MouseEvent) {
   const target = event.target as HTMLElement | null
+
+  const foldToggle = target?.closest?.('.code-fold-toggle') as HTMLElement | null
+  if (foldToggle) {
+    toggleFold(foldToggle)
+    return
+  }
+
   const button = target?.closest?.('.code-copy') as HTMLElement | null
   if (!button) return
   const pre = button.closest('pre')

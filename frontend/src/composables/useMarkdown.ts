@@ -54,33 +54,78 @@ function splitHighlightedLines(html: string): string[] {
   return lines
 }
 
+/** 超过这个行数的代码块默认折叠 */
+const CODE_FOLD_LINES = 30
+
+/**
+ * 从围栏信息里解析要高亮的行号，支持 `{2,5-7,10}` 写法。
+ * 只接受纯数字/逗号/短横线，避免把 TS 泛型之类的 `{}` 误当成行号。
+ */
+function parseHighlightLines(info: string): Set<number> {
+  const lines = new Set<number>()
+  const matched = /\{\s*([\d,\s-]+)\s*\}/.exec(info || '')
+  if (!matched) return lines
+  for (const part of matched[1].split(',')) {
+    const piece = part.trim()
+    if (!piece) continue
+    const range = /^(\d+)\s*-\s*(\d+)$/.exec(piece)
+    if (range) {
+      const from = Math.min(Number(range[1]), Number(range[2]))
+      const to = Math.max(Number(range[1]), Number(range[2]))
+      for (let n = from; n <= to; n += 1) lines.add(n)
+    } else if (/^\d+$/.test(piece)) {
+      lines.add(Number(piece))
+    }
+  }
+  return lines
+}
+
 /**
  * 渲染 fenced 代码块：语言标签 + 行号 + 一键复制按钮。
- * 返回值以 <pre 开头，markdown-it 会直接采用而不再包一层。
+ * - 支持 `{2,5-7}` 行内高亮（加 is-hl）
+ * - 行数超过 CODE_FOLD_LINES 时包一层 .code-wrap，默认折叠（只从尾部隐藏，行号保持连续）
  */
-function renderCodeBlock(code: string, lang: string): string {
+function renderCodeBlock(code: string, lang: string, info = ''): string {
+  // 围栏内容总以换行结尾，去掉它，否则每块代码末尾都会多一个空行号，
+  // 也会让 `{n}` 行号与真实行差一。
+  const source = code.endsWith('\n') ? code.slice(0, -1) : code
   const language = lang && hljs.getLanguage(lang) ? lang : ''
   let highlighted: string
   if (language) {
     try {
-      highlighted = hljs.highlight(code, { language, ignoreIllegals: true }).value
+      highlighted = hljs.highlight(source, { language, ignoreIllegals: true }).value
     } catch {
-      highlighted = md.utils.escapeHtml(code)
+      highlighted = md.utils.escapeHtml(source)
     }
   } else {
-    highlighted = md.utils.escapeHtml(code)
+    highlighted = md.utils.escapeHtml(source)
   }
 
-  const body = splitHighlightedLines(highlighted)
-    .map((line) => `<span class="code-line">${line}</span>`)
+  const highlightLines = parseHighlightLines(info)
+  const lines = splitHighlightedLines(highlighted)
+  const body = lines
+    .map((line, index) => {
+      const marked = highlightLines.has(index + 1) ? ' is-hl' : ''
+      return `<span class="code-line${marked}">${line}</span>`
+    })
     .join('')
   const langAttr = language ? ` data-lang="${language}"` : ''
   const langClass = language ? ` class="language-${language}"` : ''
 
-  return (
+  const pre =
     `<pre class="hljs code-block"${langAttr}>` +
     `<button class="code-copy" type="button" aria-label="复制代码"><span>复制</span></button>` +
     `<code${langClass}>${body}</code></pre>`
+
+  if (lines.length <= CODE_FOLD_LINES) {
+    return pre
+  }
+  // 长代码：默认折叠，把完整代码留在 DOM 里（复制仍拿到全文）
+  return (
+    `<div class="code-wrap is-collapsed" data-lines="${lines.length}">` +
+    pre +
+    `<button class="code-fold-toggle" type="button">展开全部 ${lines.length} 行</button>` +
+    `</div>`
   )
 }
 
@@ -108,7 +153,7 @@ md.renderer.rules.fence = (tokens, idx): string => {
   if (lang === 'mermaid') {
     return renderMermaidPlaceholder(token.content)
   }
-  return renderCodeBlock(token.content, lang)
+  return renderCodeBlock(token.content, lang, info)
 }
 
 export interface TocItem {

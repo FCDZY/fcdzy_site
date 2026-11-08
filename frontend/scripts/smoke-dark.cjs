@@ -90,9 +90,13 @@ const PAGE_PROBE = `(() => {
 
 const CODE_PROBE = `(() => {
   const cs = (el, pseudo) => (el ? getComputedStyle(el, pseudo || undefined) : null)
-  // 优先取「带语言标记」的代码块：首块可能是没有语言标记的裸围栏，没有 ::before 语言标签
+  // 优先取「带语言标记且有多个代码行」的代码块：
+  // - 首块可能没有语言标记（裸围栏），没有 ::before 语言标签
+  // - 也可能是一行的单行片段，没法验证行号计数器
   const allPres = Array.from(document.querySelectorAll('.markdown-body pre.hljs'))
-  const pre = allPres.find((p) => p.getAttribute('data-lang')) || allPres[0] || null
+  const decorated = allPres.filter((p) => p.getAttribute('data-lang'))
+  const multiLine = decorated.find((p) => p.querySelectorAll('.code-line').length > 1)
+  const pre = multiLine || decorated[0] || allPres[0] || null
   const code = pre ? pre.querySelector('code') : null
   const lines = pre ? Array.from(pre.querySelectorAll('.code-line')) : []
   const button = pre ? pre.querySelector('.code-copy') : null
