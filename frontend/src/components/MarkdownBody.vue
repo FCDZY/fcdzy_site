@@ -1,8 +1,11 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, ref, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { codeTextOf, renderMarkdown } from '@/composables/useMarkdown'
 import { renderMermaidBlocks } from '@/composables/useMermaid'
 import { useTheme } from '@/composables/useTheme'
+import { copyText } from '@/utils/clipboard'
+import { scrollToAnchor } from '@/utils/anchor'
 import ArticleToc from '@/components/ArticleToc.vue'
 
 const props = withDefaults(
@@ -25,17 +28,41 @@ function paintMermaid(force = false) {
   renderMermaidBlocks(bodyRef.value, theme.value, force)
 }
 
+/** 带 #锚点 打开文章时，内容渲染完再滚动过去（否则会停在顶部） */
+function applyHash() {
+  const hash = decodeURIComponent(window.location.hash || '').replace(/^#/, '')
+  if (hash) scrollToAnchor(hash)
+}
+
 onMounted(() => {
-  nextTick(() => paintMermaid())
+  nextTick(() => {
+    paintMermaid()
+    applyHash()
+  })
 })
 
 watch(
   () => result.value.html,
-  () => nextTick(() => paintMermaid())
+  () =>
+    nextTick(() => {
+      paintMermaid()
+      applyHash()
+    })
 )
 
 // 切换深色/浅色时用对应主题重新渲染，否则流程图配色会和页面不搭
 watch(theme, () => nextTick(() => paintMermaid(true)))
+
+/** 复制章节链接（点标题旁的 #） */
+async function copyHeadingLink(anchor: HTMLAnchorElement) {
+  const hash = anchor.getAttribute('href') || ''
+  const url = `${window.location.origin}${window.location.pathname}${hash}`
+  if (await copyText(url)) {
+    ElMessage.success('章节链接已复制')
+    return
+  }
+  ElMessage.info(url)
+}
 
 /** 长代码折叠/展开（事件委托，代码块由 v-html 渲染） */
 function toggleFold(button: HTMLElement) {
@@ -56,29 +83,30 @@ async function handleClick(event: MouseEvent) {
     return
   }
 
+  // 页内锚点（含标题旁的 #）：自己滚动，不走路由——否则会被 scrollBehavior 拽回顶部
+  const anchor = target?.closest?.('a[href^="#"]') as HTMLAnchorElement | null
+  if (anchor) {
+    const href = anchor.getAttribute('href') || ''
+    if (href.length > 1) {
+      event.preventDefault()
+      const ok = scrollToAnchor(href.slice(1))
+      if (!ok) {
+        ElMessage.warning('该章节不存在')
+        return
+      }
+      if (anchor.classList.contains('heading-anchor')) {
+        copyHeadingLink(anchor)
+      }
+      return
+    }
+  }
+
   const button = target?.closest?.('.code-copy') as HTMLElement | null
   if (!button) return
   const pre = button.closest('pre')
   if (!pre) return
   const text = codeTextOf(pre as HTMLElement)
-
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text)
-    } else {
-      throw new Error('clipboard unavailable')
-    }
-  } catch {
-    const textarea = document.createElement('textarea')
-    textarea.value = text
-    textarea.setAttribute('readonly', '')
-    textarea.style.position = 'fixed'
-    textarea.style.opacity = '0'
-    document.body.appendChild(textarea)
-    textarea.select()
-    document.execCommand('copy')
-    textarea.remove()
-  }
+  await copyText(text)
 
   const label = button.querySelector('span') ?? button
   if (button.dataset.copied === '1') return

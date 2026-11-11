@@ -96,8 +96,8 @@ async function waitForDevtools() {
 const PROBE_EDITOR = `(() => {
   const footer = Array.from(document.querySelectorAll('.footer-bar .el-button')).map((b) => b.textContent.trim())
   const statusText = (document.querySelector('.status-line') || {}).innerText || ''
-  const pop = document.querySelector('.el-popover')
-  const picker = document.querySelector('.el-popover .el-date-editor input')
+  const pop = document.querySelector('.schedule-popper')
+  const picker = document.querySelector('.schedule-popper .el-date-editor input')
   return JSON.stringify({
     footer,
     statusText: statusText.replace(/\\s+/g, ' ').trim(),
@@ -305,7 +305,7 @@ const PROBE_EDITOR = `(() => {
       const panelState = JSON.parse(
         await evaluate(`(() => {
           const panels = Array.from(document.querySelectorAll('.el-picker-panel'))
-          const inPopover = panels.some((p) => !!p.closest('.el-popover'))
+          const inPopover = panels.some((p) => !!p.closest('.schedule-popper'))
           const rect = panels.length ? panels[0].getBoundingClientRect() : null
           return JSON.stringify({
             count: panels.length,
@@ -322,7 +322,7 @@ const PROBE_EDITOR = `(() => {
       await sleep(700)
       const afterPick = JSON.parse(
         await evaluate(`(() => {
-          const pop = Array.from(document.querySelectorAll('.el-popover')).find((p) => p.getBoundingClientRect().width > 0)
+          const pop = Array.from(document.querySelectorAll('.schedule-popper')).find((p) => p.getBoundingClientRect().width > 0)
           return JSON.stringify({
             popoverOpen: !!pop,
             url: location.pathname,

@@ -260,12 +260,51 @@ const isLightColor = (v) => brightness(v) > 150
       titleValue = await readTitle()
     }
     check('标题回填', titleValue === sampleArticle.title, `${titleValue} / 期望 ${sampleArticle.title}`)
-    check(
-      '三个动作按钮（保存草稿 / 设置定时发布 / 立即发布）',
-      hasText(dom, '保存草稿') && hasText(dom, '设置定时发布') && hasText(dom, '立即发布')
-    )
     check('无控制台报错', consoleErrors.length === 0)
     if (consoleErrors.length) console.log('    错误:', consoleErrors.slice(0, 3))
+
+    // 5.1) 章节锚点面板：列出标题 → 点击插入 [标题](#锚点)
+    console.log('\n章节锚点面板')
+    const anchorInfo = JSON.parse(await evaluate(`(() => {
+      const btn = Array.from(document.querySelectorAll('.editor-bar button'))
+        .find((b) => (b.textContent || '').includes('章节锚点'))
+      if (!btn) return JSON.stringify({ found: false })
+      const matched = (btn.textContent || '').match(/章节锚点（(\\d+)）/);
+      btn.click()
+      return JSON.stringify({ found: true, disabled: btn.disabled, count: matched ? Number(matched[1]) : 0 })
+    })()`))
+    check('编辑页有「章节锚点」按钮', anchorInfo.found === true)
+    check('按钮上显示标题数量', anchorInfo.count > 0, String(anchorInfo.count))
+
+    await sleep(700)
+    const panel = JSON.parse(await evaluate(`(() => {
+      const items = Array.from(document.querySelectorAll('.heading-panel__item'))
+      return JSON.stringify({
+        count: items.length,
+        firstText: items[0] && items[0].querySelector('.heading-panel__text') ? items[0].querySelector('.heading-panel__text').textContent : '',
+        firstId: items[0] && items[0].querySelector('.heading-panel__id') ? items[0].querySelector('.heading-panel__id').textContent : '',
+        allHaveId: items.every((el) => {
+          const code = el.querySelector('.heading-panel__id')
+          return !!code && /^#[^\\s]+$/.test((code.textContent || '').trim())
+        })
+      })
+    })()`))
+    console.log('面板:', JSON.stringify(panel))
+    check('面板条目数 = 按钮上的数量', panel.count === anchorInfo.count, panel.count + ' / ' + anchorInfo.count)
+    check('每项都带 #锚点', panel.allHaveId === true)
+    check('第一项有标题文字与锚点', Boolean(panel.firstText) && Boolean(panel.firstId), panel.firstText + ' ' + panel.firstId)
+
+    await evaluate("document.querySelector('.heading-panel__item').click()")
+    await sleep(700)
+    const afterInsert = JSON.parse(await evaluate(`(() => {
+      const content = document.querySelector('.cm-content')
+      const view = content && content.cmView && content.cmView.view
+      const doc = view && view.state && view.state.doc ? view.state.doc.toString() : (content ? content.innerText : '')
+      const msg = document.querySelector('.el-message__content')
+      return JSON.stringify({ inserted: /\\]\\(#/.test(doc), msg: msg ? msg.textContent.trim() : '' })
+    })()`))
+    check('点击后提示「已插入章节链接」', afterInsert.msg.includes('已插入'), afterInsert.msg || '(无提示)')
+    check('编辑器内容里出现 [#锚点] 链接', afterInsert.inserted === true)
 
     // 6) 专题排序（若无专题则跳过）
     if (sampleTopic) {

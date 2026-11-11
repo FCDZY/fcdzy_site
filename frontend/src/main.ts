@@ -11,11 +11,14 @@ import 'highlight.js/styles/github.css'
 import '@/styles/code-dark.css'
 import '@/styles/main.css'
 import { initTheme } from '@/composables/useTheme'
+import { initReadingPrefs } from '@/composables/useReadingPrefs'
 import App from './App.vue'
 import router from './router'
 
 /* 挂载前应用已保存的主题，避免首屏闪白 */
 initTheme()
+/* 阅读偏好（字号/行宽）也提前应用，避免正文先按默认字号闪一下再变 */
+initReadingPrefs()
 
 const app = createApp(App)
 

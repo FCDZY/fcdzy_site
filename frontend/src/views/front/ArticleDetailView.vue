@@ -1,13 +1,17 @@
 <script setup lang="ts">
 import { computed, watch, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { publicApi } from '@/api'
 import type { Article } from '@/types'
 import { useSeo } from '@/composables/useSeo'
 import { formatDate, formatNumber } from '@/utils/format'
+import { formatChars, readingStats } from '@/utils/reading'
 import MarkdownBody from '@/components/MarkdownBody.vue'
 import ArticleComments from '@/components/ArticleComments.vue'
 import ReadingProgress from '@/components/ReadingProgress.vue'
+import ReadingSettings from '@/components/ReadingSettings.vue'
+import ImageLightbox from '@/components/ImageLightbox.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -21,6 +25,91 @@ const failed = ref(false)
 
 const article = computed<Article>(() => loaded.value || PLACEHOLDER)
 const publishDate = computed(() => formatDate(article.value.publishedAt || article.value.createdAt))
+
+/** 阅读时长 / 字数（代码块不计入） */
+const stats = computed(() => readingStats(article.value.content))
+
+/** 分享链接：始终是当前文章的标准地址 */
+const shareUrl = computed(() => {
+  const slug = article.value.slug
+  if (!slug) return typeof location === 'undefined' ? '' : location.href
+  return `${location.origin}/article/${slug}`
+})
+
+const copied = ref(false)
+let copiedTimer: number | undefined
+
+/** 复制文章链接 */
+async function copyLink() {
+  const url = shareUrl.value
+  if (!url) return
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(url)
+    } else {
+      const textarea = document.createElement('textarea')
+      textarea.value = url
+      textarea.setAttribute('readonly', '')
+      textarea.style.position = 'fixed'
+      textarea.style.opacity = '0'
+      document.body.appendChild(textarea)
+      textarea.select()
+      document.execCommand('copy')
+      textarea.remove()
+    }
+    copied.value = true
+    ElMessage.success('链接已复制')
+    if (copiedTimer) window.clearTimeout(copiedTimer)
+    copiedTimer = window.setTimeout(() => {
+      copied.value = false
+    }, 1600)
+  } catch {
+    ElMessage.warning('复制失败，请手动复制地址栏链接')
+  }
+}
+
+/** 系统分享（移动端/支持的浏览器才有） */
+const canNativeShare = computed(
+  () => typeof navigator !== 'undefined' && typeof navigator.share === 'function'
+)
+
+async function nativeShare() {
+  try {
+    await navigator.share({ title: article.value.title, url: shareUrl.value })
+  } catch {
+    /* 用户取消，忽略 */
+  }
+}
+
+/** 分享到微博 */
+function shareToWeibo() {
+  const url = encodeURIComponent(shareUrl.value)
+  const title = encodeURIComponent(article.value.title || '')
+  window.open(
+    `https://service.weibo.com/share/share.php?url=${url}&title=${title}`,
+    '_blank',
+    'noopener,noreferrer'
+  )
+}
+
+/** 图片灯箱 */
+const viewerOpen = ref(false)
+const viewerIndex = ref(0)
+const viewerUrls = ref<string[]>([])
+
+function openViewer(event: MouseEvent) {
+  const target = event.target as HTMLElement | null
+  const img = target?.closest?.('.markdown-body img') as HTMLImageElement | null
+  if (!img || !img.src) return
+  const all = Array.from(document.querySelectorAll<HTMLImageElement>('.markdown-body img'))
+  const urls = all.map((item) => item.currentSrc || item.src).filter(Boolean)
+  if (!urls.length) return
+  const index = Math.max(0, urls.indexOf(img.currentSrc || img.src))
+  viewerUrls.value = urls
+  viewerIndex.value = index
+  viewerOpen.value = true
+  event.preventDefault()
+}
 
 function openArticle(slug: string) {
   router.push({ name: 'article', params: { slug } })
@@ -109,6 +198,10 @@ watch(
                 <el-icon><View /></el-icon>
                 {{ formatNumber(article.viewCount) }} 次阅读
               </span>
+              <span v-if="stats.chars" class="meta-item">
+                <el-icon><Timer /></el-icon>
+                约 {{ stats.minutes }} 分钟 · {{ formatChars(stats.chars) }} 字
+              </span>
               <router-link v-if="article.category" class="badge category" :to="`/category/${article.category.slug}`">
                 {{ article.category.name }}
               </router-link>
@@ -116,12 +209,31 @@ watch(
                 <el-icon :size="14"><ChatDotRound /></el-icon>
                 <span>直达评论</span>
               </button>
+              <!-- 阅读设置：字号 / 行宽（只保存在本机） -->
+              <ReadingSettings />
             </div>
             <div v-if="article.tags && article.tags.length" class="tags">
               <router-link v-for="tag in article.tags" :key="tag.id" class="tag" :to="`/tag/${tag.slug}`">
                 # {{ tag.name }}
               </router-link>
             </div>
+
+            <!-- 分享：复制链接 / 系统分享（仅支持的浏览器）/ 微博 -->
+            <div class="share-row">
+              <button type="button" class="share-btn" :class="{ 'is-copied': copied }" @click="copyLink">
+                <el-icon :size="14"><Link /></el-icon>
+                <span>{{ copied ? '已复制' : '复制链接' }}</span>
+              </button>
+              <button v-if="canNativeShare" type="button" class="share-btn" @click="nativeShare">
+                <el-icon :size="14"><Share /></el-icon>
+                <span>分享</span>
+              </button>
+              <button type="button" class="share-btn" @click="shareToWeibo">
+                <el-icon :size="14"><Promotion /></el-icon>
+                <span>微博</span>
+              </button>
+            </div>
+
             <img
               v-if="article.coverImage && !coverFailed"
               :src="article.coverImage"
@@ -132,8 +244,18 @@ watch(
             <p v-if="article.summary" class="summary">{{ article.summary }}</p>
           </header>
 
-          <MarkdownBody :content="article.content" show-toc />
+          <div class="content-body" @click="openViewer">
+            <MarkdownBody :content="article.content" show-toc />
+          </div>
         </article>
+
+        <!-- 图片灯箱（点正文图片放大，支持左右切换/缩放） -->
+        <ImageLightbox
+          v-if="viewerOpen"
+          :urls="viewerUrls"
+          :index="viewerIndex"
+          @close="viewerOpen = false"
+        />
 
         <!-- 评论区：访客免登录，新评论需站长审核后展示 -->
         <ArticleComments :slug="article.slug" />
@@ -186,6 +308,14 @@ watch(
 .article {
   padding: 26px 28px 30px;
   background: var(--surface-reading);
+}
+
+/* 阅读设置里的「行宽」：只在桌面端生效，窄屏本来就没空间 */
+@media (min-width: 769px) {
+  .article {
+    max-width: var(--reading-width);
+    margin-inline: auto;
+  }
 }
 
 .head {
@@ -254,6 +384,43 @@ watch(
   border-color: var(--brand);
   color: #fff;
   transform: translateY(-1px);
+}
+
+/* 分享按钮组 */
+.share-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.share-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 12px;
+  font-family: inherit;
+  font-size: 12.5px;
+  line-height: 1.8;
+  color: var(--text-2);
+  background: var(--chip-bg);
+  border: 1px solid var(--chip-border);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: color 0.16s ease, background 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+}
+
+.share-btn:hover {
+  color: var(--brand-dark);
+  background: var(--brand-soft);
+  border-color: var(--chip-border-hover);
+  transform: translateY(-1px);
+}
+
+.share-btn.is-copied {
+  color: var(--brand-dark);
+  background: var(--brand-soft);
+  border-color: var(--brand);
 }
 
 .tags {

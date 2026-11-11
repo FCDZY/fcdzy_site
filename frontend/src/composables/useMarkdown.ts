@@ -1,6 +1,7 @@
 import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js/lib/common'
 import DOMPurify from 'dompurify'
+import { normalizeAnchor } from '@/utils/anchor'
 import { plainText } from '@/utils/text'
 
 export { plainText }
@@ -167,13 +168,28 @@ export interface RenderResult {
   toc: TocItem[]
 }
 
-function slugifyHeading(text: string, index: number): string {
-  const base = text
-    .trim()
-    .toLowerCase()
-    .replace(/[^\w\u4e00-\u9fa5]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  return base ? `${base}-${index}` : `heading-${index}`
+function slugifyHeading(text: string): string {
+  return normalizeAnchor(text)
+}
+
+/** 标题尾部的显式锚点：## 标题 {#custom-id} */
+const EXPLICIT_ID = /\s*\{#([A-Za-z0-9_\-:.\u4e00-\u9fa5]+)\}\s*$/
+
+/** 把 {#custom-id} 从标题里剥掉，但不破坏标题内部的加粗/行内代码等格式 */
+function stripExplicitId(heading: Element, fallbackText: string) {
+  const children = Array.from(heading.childNodes)
+  for (let i = children.length - 1; i >= 0; i -= 1) {
+    const node = children[i]
+    if (node.nodeType === 3) {
+      const value = node.nodeValue || ''
+      if (EXPLICIT_ID.test(value)) {
+        node.nodeValue = value.replace(EXPLICIT_ID, '')
+        return
+      }
+    }
+  }
+  // 极端情况（{#id} 被包在 <code>/<em> 里）：整体回退成纯文本
+  heading.textContent = fallbackText
 }
 
 /** 渲染 Markdown，并顺带抽取目录（同时给标题写入锚点 id） */
@@ -196,11 +212,37 @@ export function renderMarkdown(content?: string | null): RenderResult {
   const toc: TocItem[] = []
   if (root) {
     const headings = Array.from(root.querySelectorAll('h1, h2, h3'))
+    /** 同名标题按出现顺序追加 -2 / -3，保证 id 唯一且第一个不带后缀（可预测、可手写） */
+    const used = new Map<string, number>()
     headings.forEach((heading, index) => {
-      const text = heading.textContent || `标题${index + 1}`
-      const id = slugifyHeading(text, index)
+      // 目录文字要在插入 # 锚点之前取，否则会把符号也带进目录
+      const rawText = heading.textContent || `标题${index + 1}`
+      // 支持显式锚点：## 标题 {#自定义id}（Docusaurus / Pandoc 风格）
+      const explicit = EXPLICIT_ID.exec(rawText)
+      let text = rawText
+      let base: string
+      if (explicit) {
+        text = rawText.replace(EXPLICIT_ID, '').trim()
+        base = explicit[1]
+        stripExplicitId(heading, text)
+      } else {
+        base = slugifyHeading(text)
+      }
+      const seen = used.get(base) || 0
+      used.set(base, seen + 1)
+      const id = seen === 0 ? base : `${base}-${seen + 1}`
       heading.setAttribute('id', id)
-      toc.push({ id, text, level: Number(heading.tagName.substring(1)) })
+      toc.push({ id, text: text || `标题${index + 1}`, level: Number(heading.tagName.substring(1)) })
+
+      // 标题旁的 # 锚点：hover 才显示，点击复制本章节链接
+      const anchor = doc.createElement('a')
+      anchor.className = 'heading-anchor'
+      anchor.setAttribute('href', `#${id}`)
+      anchor.setAttribute('aria-label', '复制本章节链接')
+      anchor.setAttribute('title', '复制本章节链接')
+      // 符号用 CSS ::before 画，不放文本节点：
+      // 否则标题的 textContent 会带上 "#"，污染目录文字 / 搜索高亮 / 复制
+      heading.appendChild(anchor)
     })
     root.querySelectorAll('a[href^="http"]').forEach((link) => {
       link.setAttribute('target', '_blank')

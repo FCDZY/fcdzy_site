@@ -10,6 +10,7 @@ import { adminApi, publicApi } from '@/api'
 import type { Article, ArticleForm, Category, Tag } from '@/types'
 import ImageUploader from '@/components/admin/ImageUploader.vue'
 import { validateImageFile } from '@/utils/upload'
+import { extractHeadings, type HeadingItem } from '@/utils/headings'
 
 const props = defineProps<{ id?: string }>()
 
@@ -97,6 +98,26 @@ const fileInputRef = ref<HTMLInputElement | null>(null)
 const editorWrapRef = ref<HTMLElement | null>(null)
 const dragging = ref(false)
 let dragDepth = 0
+
+/** 正文里所有标题（实时从 Markdown 抽），点一下就把 [标题](#锚点) 插到光标处 */
+const headings = computed<HeadingItem[]>(() => extractHeadings(form.content))
+
+const mdEditorRef = ref<InstanceType<typeof MdEditor> | null>(null)
+
+type EditorExpose = { insert?: (generate: () => { targetValue: string }) => void }
+
+function insertHeadingLink(heading: HeadingItem) {
+  const snippet = `[${heading.text}](#${heading.id})`
+  const editor = mdEditorRef.value as unknown as EditorExpose | null
+  if (editor?.insert) {
+    editor.insert(() => ({ targetValue: snippet }))
+    ElMessage.success('已插入章节链接')
+    return
+  }
+  // 兜底：拿不到编辑器实例时追加到文末
+  form.content = `${form.content.trimEnd()}\n\n${snippet}\n`
+  ElMessage.success('已追加章节链接')
+}
 
 function formatSize(size: number): string {
   if (size < 1024) return `${size} B`
@@ -449,11 +470,48 @@ onBeforeUnmount(() => {
           <div ref="editorWrapRef" class="editor-wrap" :class="{ 'is-dragging': dragging }">
             <div class="editor-bar">
               <el-button size="small" :icon="'UploadFilled'" @click="openFilePicker">导入 Markdown 文件</el-button>
+
+              <!-- 章节锚点：列出本文所有标题，点一下插入 [标题](#锚点) -->
+              <el-popover
+                trigger="click"
+                placement="bottom-start"
+                :width="400"
+                popper-class="heading-panel-popper"
+                teleported
+              >
+                <template #reference>
+                  <el-button size="small" :icon="'Link'" :disabled="!headings.length">
+                    章节锚点{{ headings.length ? `（${headings.length}）` : '' }}
+                  </el-button>
+                </template>
+
+                <div class="heading-panel">
+                  <p v-if="!headings.length" class="heading-panel__empty">
+                    正文里还没有标题，用 <code>## 标题</code> 开头就会出现
+                  </p>
+                  <template v-else>
+                    <p class="heading-panel__tip">点击任意一项，把 <code>[标题](#锚点)</code> 插入到光标处</p>
+                    <button
+                      v-for="item in headings"
+                      :key="item.id"
+                      type="button"
+                      class="heading-panel__item"
+                      :style="{ paddingLeft: 8 + (item.level - 1) * 14 + 'px' }"
+                      @click="insertHeadingLink(item)"
+                    >
+                      <span class="heading-panel__text">{{ item.text }}</span>
+                      <code class="heading-panel__id">#{{ item.id }}</code>
+                    </button>
+                  </template>
+                </div>
+              </el-popover>
+
               <span class="editor-bar-tip">支持 .md / .markdown，单个文件不超过 4MB；也可直接把文件拖到下方编辑器</span>
             </div>
 
             <div class="editor-area">
               <MdEditor
+                ref="mdEditorRef"
                 v-model="form.content"
                 language="zh-CN"
                 :style="{ height: '520px' }"
