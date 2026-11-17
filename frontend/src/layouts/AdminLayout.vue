@@ -14,16 +14,39 @@ const route = useRoute()
 const router = useRouter()
 const collapsed = ref(false)
 
-const menus = [
-  { path: '/yzdcf', label: '仪表盘', icon: 'Odometer' },
-  { path: '/yzdcf/articles', label: '文章管理', icon: 'Document' },
-  { path: '/yzdcf/categories', label: '分类管理', icon: 'FolderOpened' },
-  { path: '/yzdcf/tags', label: '标签管理', icon: 'PriceTag' },
-  { path: '/yzdcf/topics', label: '专题管理', icon: 'Collection' },
-  { path: '/yzdcf/comments', label: '评论管理', icon: 'ChatDotRound' },
-  { path: '/yzdcf/settings', label: '站点配置', icon: 'Setting' },
-  { path: '/yzdcf/profile', label: '账号设置', icon: 'User' }
+/**
+ * 菜单分组：参考「内容 / 互动 / 设置」三段式，
+ * 每组之间用小号大写组名隔开，降低一次性扫读的负担。
+ */
+const menuGroups = [
+  {
+    label: '',
+    items: [{ path: '/yzdcf', label: '仪表盘', icon: 'Odometer' }]
+  },
+  {
+    label: '内容',
+    items: [
+      { path: '/yzdcf/articles', label: '文章管理', icon: 'Document' },
+      { path: '/yzdcf/categories', label: '分类管理', icon: 'FolderOpened' },
+      { path: '/yzdcf/tags', label: '标签管理', icon: 'PriceTag' },
+      { path: '/yzdcf/topics', label: '专题管理', icon: 'Collection' }
+    ]
+  },
+  {
+    label: '互动',
+    items: [{ path: '/yzdcf/comments', label: '评论管理', icon: 'ChatDotRound' }]
+  },
+  {
+    label: '设置',
+    items: [
+      { path: '/yzdcf/settings', label: '站点配置', icon: 'Setting' },
+      { path: '/yzdcf/profile', label: '账号设置', icon: 'User' }
+    ]
+  }
 ]
+
+/** 拍平后的菜单（activePath 计算用） */
+const menus = menuGroups.flatMap((group) => group.items)
 
 const activePath = computed(() => {
   const matched = menus
@@ -65,12 +88,17 @@ async function handleLogout() {
         <span class="dot">M</span>
         <span v-show="!collapsed" class="name">{{ site.siteName }} · 后台</span>
       </div>
-      <el-menu :default-active="activePath" :collapse="collapsed" router class="menu">
-        <el-menu-item v-for="menu in menus" :key="menu.path" :index="menu.path">
-          <el-icon><component :is="menu.icon" /></el-icon>
-          <template #title>{{ menu.label }}</template>
-        </el-menu-item>
-      </el-menu>
+      <nav class="menu-nav">
+        <template v-for="(group, index) in menuGroups" :key="index">
+          <p v-if="group.label && !collapsed" class="menu-group">{{ group.label }}</p>
+          <el-menu :default-active="activePath" :collapse="collapsed" router class="menu">
+            <el-menu-item v-for="menu in group.items" :key="menu.path" :index="menu.path">
+              <el-icon><component :is="menu.icon" /></el-icon>
+              <template #title>{{ menu.label }}</template>
+            </el-menu-item>
+          </el-menu>
+        </template>
+      </nav>
     </el-aside>
 
     <el-container>
@@ -126,11 +154,11 @@ async function handleLogout() {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 56px;
-  padding: 0 14px;
-  color: #fff;
+  height: 58px;
+  padding: 0 16px;
+  color: var(--admin-fg);
   cursor: pointer;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: 1px solid var(--admin-line);
   white-space: nowrap;
 }
 
@@ -141,9 +169,10 @@ async function handleLogout() {
   width: 28px;
   height: 28px;
   flex: 0 0 28px;
-  border-radius: 8px;
-  background: linear-gradient(135deg, #3b82f6, #6366f1);
-  font-weight: 700;
+  border-radius: 9px;
+  background: #ffd43b;
+  color: #111;
+  font-weight: 800;
   font-size: 14px;
 }
 
@@ -157,9 +186,17 @@ async function handleLogout() {
   border-right: none;
   background: transparent;
   --el-menu-bg-color: transparent;
-  --el-menu-text-color: #cbd5e1;
+  --el-menu-text-color: var(--admin-muted);
   --el-menu-hover-bg-color: var(--admin-aside-hover);
-  --el-menu-active-color: #ffffff;
+  --el-menu-active-color: var(--admin-fg);
+}
+
+/* 菜单项：圆角、留白更大、选中用灰底不用彩色 */
+.menu :deep(.el-menu-item) {
+  height: 38px;
+  margin: 2px 10px;
+  border-radius: 9px;
+  font-size: 14px;
 }
 
 .menu :deep(.el-menu-item) {
@@ -169,46 +206,29 @@ async function handleLogout() {
 
 .menu :deep(.el-menu-item:hover) {
   background: var(--admin-aside-hover);
-  color: #fff;
+  color: var(--admin-fg);
 }
 
-/* 选中项：不用整块蓝底，改为左侧彩色竖线 + 白字 */
+/* 选中项：灰底 + 加粗（参考图的做法：不用彩色块，靠底和字重） */
 .menu :deep(.el-menu-item.is-active) {
-  background: transparent;
-  color: #fff;
-  font-weight: 600;
-}
-
-.menu :deep(.el-menu-item.is-active)::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 9px;
-  bottom: 9px;
-  width: 3px;
-  border-radius: 0 3px 3px 0;
-  background: linear-gradient(180deg, #60a5fa, #818cf8);
-  box-shadow: 0 0 8px rgba(96, 165, 250, 0.45);
+  background: var(--admin-aside-active);
+  color: var(--admin-fg);
+  font-weight: 650;
 }
 
 .menu :deep(.el-menu-item.is-active .el-icon) {
-  color: #93c5fd;
-}
-
-/* 收起时竖线照样保留 */
-.menu.el-menu--collapse :deep(.el-menu-item.is-active)::before {
-  top: 12px;
-  bottom: 12px;
+  color: var(--admin-fg);
 }
 
 .header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  background: var(--card);
-  border-bottom: 1px solid var(--border);
-  height: 56px;
-  padding: 0 12px;
+  background: var(--admin-header-bg);
+  border-bottom: 1px solid var(--admin-line);
+  box-shadow: none;
+  height: 58px;
+  padding: 0 14px;
   transition: background-color 0.3s ease, border-color 0.3s ease;
 }
 
@@ -242,8 +262,20 @@ async function handleLogout() {
 }
 
 .main {
-  background: var(--bg);
-  padding: 0;
+  background: var(--admin-main-bg);
+  padding: 26px 30px 40px;
+}
+
+/* 页面标题（顶栏里的）稍微收紧，和参考图的轻量感一致 */
+.title {
+  font-weight: 650;
+  color: var(--admin-fg);
+}
+
+@media (max-width: 768px) {
+  .main {
+    padding: 16px 14px 32px;
+  }
 }
 
 @media (max-width: 768px) {

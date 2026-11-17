@@ -228,86 +228,145 @@ const PROBE = `(() => {
     const light = await probe()
     const shotPrefix = process.env.SMOKE_SHOT
 
-    console.log('【需求 1】数据概览：7 张主题色统计卡')
-    check('共 8 张统计卡（草稿与定时各自独立）', light.statCount === 8, `${light.statCount} 张`)
-    const accents = light.stats.map((s) => s.accentBg)
-    check('每张卡片有独立主题色', new Set(accents).size === light.statCount, accents.join(' / '))
-    check('卡片顶色条纤细（2~4px）', light.stats.every((s) => s.accentHeight >= 2 && s.accentHeight <= 4), light.stats.map((s) => s.accentHeight).join(','))
-    check('数字放大（≥26px）且加粗（≥700）', light.stats.every((s) => s.valueSize >= 26 && s.valueWeight >= 700), `${light.stats[0].valueSize}px / ${light.stats[0].valueWeight}`)
-    check('标签文字在数字下方', light.stats.every((s) => s.labelBelow && s.labelText.length > 0), light.stats.map((s) => s.labelText).join(' / '))
-    check('统一 8px 圆角', light.stats.every((s) => parseFloat(s.radius) === 8), light.stats[0].radius)
-    check('有柔和阴影', light.stats.every((s) => s.shadow !== 'none' && s.shadow.includes('rgba')), light.stats[0].shadow.slice(0, 60))
-    check('不是纯白死板底（有主题色渐变或非纯白底色）', light.stats.every((s) => s.bgImage !== 'none' || s.bgColor !== 'rgb(255, 255, 255)'), light.stats[0].bgImage.slice(0, 60))
-
-    // hover 上浮
-    const rect = JSON.parse(
-      await evaluate(`(() => { const b = document.querySelector('.stat').getBoundingClientRect(); return JSON.stringify({ x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }) })()`)
+    // ===== 新版布局：图 + 3 指标 / 表格 + 5 小卡 =====
+    // ===== 新版布局：趋势 + 指标合成一张卡 / 下排两卡等高 =====
+    const layout = JSON.parse(
+      await evaluate(`(() => {
+        const overview = document.querySelector('.overview')
+        const metricsPanel = document.querySelector('.overview-metrics')
+        const rows = Array.from(document.querySelectorAll('.metric-row'))
+        const recent = document.querySelector('.recent-panel')
+        const side = document.querySelector('.side-panel')
+        const title = recent ? recent.querySelector('.panel-title') : null
+        const action = recent ? recent.querySelector('.panel-head .el-button') : null
+        const recentRect = recent ? recent.getBoundingClientRect() : null
+        return JSON.stringify({
+          titles: Array.from(document.querySelectorAll('.panel-title')).map((el) => el.textContent.trim()),
+          metricsInsideOverview: !!(overview && metricsPanel && overview.contains(metricsPanel)),
+          rows: rows.map((r) => ({
+            label: (r.querySelector('.metric-label') || {}).textContent?.trim() || '',
+            value: (r.querySelector('.metric-value') || {}).textContent?.trim() || '',
+            sub: (r.querySelector('.metric-sub') || {}).textContent?.trim() || '',
+            height: Math.round(r.getBoundingClientRect().height)
+          })),
+          minis: Array.from(document.querySelectorAll('.mini-card')).map((m) => ({
+            label: (m.querySelector('.mini-label') || {}).textContent?.trim() || '',
+            value: (m.querySelector('.mini-value') || {}).textContent?.trim() || ''
+          })),
+          hasErrorBlock: !!document.querySelector('.error-block'),
+          errorText: (document.querySelector('.error-head') || {}).textContent?.replace(/\\s+/g, ' ').trim() || '',
+          hasShortcuts: document.body.textContent.includes('快捷操作'),
+          daysOn: (document.querySelector('.days-btn.is-on') || {}).textContent?.trim() || '',
+          recentH: recentRect ? Math.round(recentRect.height) : 0,
+          sideH: side ? Math.round(side.getBoundingClientRect().height) : 0,
+          titleInset: recentRect && title ? Math.round(title.getBoundingClientRect().left - recentRect.left) : -1,
+          actionInset: recentRect && action ? Math.round(recentRect.right - action.getBoundingClientRect().right) : -1
+        })
+      })()`)
     )
-    await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x, y: rect.y, button: 'none', buttons: 0 })
-    await sleep(320)
-    const hovered = await probe()
-    const hoverTransform = hovered.stats[0].transform
-    check('hover 有轻微上浮', hoverTransform.includes('matrix') && hoverTransform.includes('-2'), hoverTransform)
+    console.log('【需求 1】布局：上排一块、下排两卡')
+    check('四个面板标题齐全', layout.titles.join(',') === '阅读趋势,关键指标,最近更新,内容构成', layout.titles.join(' / '))
+    check('趋势与指标在同一个面板里', layout.metricsInsideOverview === true)
+    check('已移除快捷操作区块', layout.hasShortcuts === false)
+    check('下排两卡等高', Math.abs(layout.recentH - layout.sideH) <= 2, `${layout.recentH} / ${layout.sideH}`)
+    check('标题左内缩 ≥10px（不贴边框）', layout.titleInset >= 10, layout.titleInset + 'px')
+    check('查看全部右内缩 ≥10px（不贴边框）', layout.actionInset >= 10, layout.actionInset + 'px')
 
-    console.log('\n【图表】近 7 天阅读趋势（面积折线）')
-    check('接口返回 7 个数据点', points.length === 7, `${points.length} 个`)
-    const today = new Date()
-    const expectedLabels = Array.from({ length: 7 }, (_, i) => {
-      const d = new Date(today.getTime() - (6 - i) * 86400000)
-      const pad = (n) => String(n).padStart(2, '0')
-      return `${pad(d.getMonth() + 1)}-${pad(d.getDate())}`
-    })
-    check('日期为最近 7 天且升序', points.map((p) => p.label).join(',') === expectedLabels.join(','), points.map((p) => p.label).join(','))
-    check('最后一天是今天', points[6]?.date === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`, points[6]?.date)
-    check('模块标题为「近 7 天阅读趋势」', light.trendTitle.includes('近 7 天阅读趋势'), light.trendTitle.replace(/\s+/g, ' ').trim())
+    console.log('\n【需求 2】关键指标：三行等分 + 细线分隔')
+    check('3 条指标', layout.rows.length === 3, layout.rows.map((r) => r.label).join(' / '))
+    check(
+      '依次为 总阅读量 / 总文章数 / 已发布',
+      layout.rows.map((r) => r.label).join(',') === '总阅读量,总文章数,已发布',
+      layout.rows.map((r) => r.label).join(',')
+    )
+    check(
+      '三行等高（等分，不留大空隙）',
+      Math.max(...layout.rows.map((r) => r.height)) - Math.min(...layout.rows.map((r) => r.height)) <= 3,
+      layout.rows.map((r) => r.height + 'px').join(' / ')
+    )
+    check('只有总阅读量带环比小字', layout.rows[0].sub.length > 0 && layout.rows[1].sub === '' && layout.rows[2].sub === '', layout.rows.map((r) => r.sub || '(空)').join(' | '))
+    check('环比用绝对值次数', /[+−]\d+ 次较前 \d+ 天/.test(layout.rows[0].sub), layout.rows[0].sub)
+
+    console.log('\n【需求 3】内容构成：4 个数字 + 前端异常块')
+    check('4 个数字卡（标签数已移除）', layout.minis.length === 4, layout.minis.map((m) => `${m.label}=${m.value}`).join(' '))
+    check(
+      '依次为 草稿 / 定时发布 / 分类 / 专题',
+      layout.minis.map((m) => m.label).join(',') === '草稿,定时发布,分类,专题',
+      layout.minis.map((m) => m.label).join(',')
+    )
+    check('有前端异常块', layout.hasErrorBlock === true && /前端异常/.test(layout.errorText), layout.errorText)
+
+    console.log('\n【需求 4】阅读趋势（折线 + 均值线 + 天数切换）')
+    check('默认 14 天', layout.daysOn === '14 天', layout.daysOn)
     check('图表 canvas 已渲染', light.hasCanvas && light.canvasW > 0 && light.canvasH > 0, `${light.canvasW}x${light.canvasH}`)
     check('canvas 上确实画出了内容', light.painted && light.colors > 2, `不同颜色 ${light.colors} 种`)
+
+    const geo = JSON.parse(
+      await evaluate(`(() => {
+        const canvas = document.querySelector('.trend-canvas canvas')
+        const overview = document.querySelector('.overview')
+        const cs = overview ? getComputedStyle(overview) : null
+        return JSON.stringify({
+          canvasH: canvas ? Math.round(canvas.getBoundingClientRect().height) : 0,
+          overviewBorder: cs ? cs.borderTopColor : '',
+          hasShadow: cs ? cs.boxShadow !== 'none' : false
+        })
+      })()`)
+    )
+    check('图表高度 >= 320px（不被压成横条）', geo.canvasH >= 320, geo.canvasH + 'px')
+    check('面板去掉硬边框', geo.overviewBorder === 'rgba(0, 0, 0, 0)', geo.overviewBorder)
+    check('面板用阴影分层', geo.hasShadow === true)
+
+    // 切到 7 天
+    await evaluate(`(() => { const b = Array.from(document.querySelectorAll('.days-btn')).find((el) => el.textContent.includes('7')); if (b) b.click() })()`)
+    await sleep(1600)
+    const after7 = JSON.parse(
+      await evaluate(`(() => JSON.stringify({
+        daysOn: (document.querySelector('.days-btn.is-on') || {}).textContent?.trim() || '',
+        hasCanvas: !!document.querySelector('.trend-canvas canvas')
+      }))()`)
+    )
+    check('点「7 天」后切换生效', after7.daysOn === '7 天', after7.daysOn)
+    check('切换后图表仍正常渲染', after7.hasCanvas === true)
     if (shotPrefix) await shoot(`${shotPrefix}-dashboard-light.png`)
 
-    console.log('\n【需求 2】最近更新表格')
+    console.log('\n【需求 5】最近更新表格')
     check('表格有数据行', light.rowCount >= 3, `${light.rowCount} 行`)
-    check('斑马纹：奇偶行底色不同', light.rowBgs[0] !== light.rowBgs[1], `${light.rowBgs[0]} vs ${light.rowBgs[1]}`)
-    check('表头无实底（弱化）', light.headBg === 'rgba(0, 0, 0, 0)' || light.headBg === 'transparent', light.headBg)
-    check('表头只留一条细线', light.headBorder.startsWith('1px'), light.headBorder)
+    check('表格去掉斑马纹（背景一致）', light.rowBgs[0] === light.rowBgs[1], light.rowBgs[0] + ' vs ' + light.rowBgs[1])
+    check('表头与卡片同色（靠细线区分，不叠加色块）', light.headBg === 'rgb(255, 255, 255)', light.headBg)
     check('状态为圆角小标签', light.pill && light.pill.radius === '999px', light.pill ? light.pill.radius : '(无)')
     check('已发布=绿色、草稿=橙色', new Set(light.pills.map((p) => p.color)).size >= 1 && light.pills.some((p) => p.text.includes('已发布')), light.pills.map((p) => `${p.text}:${p.color}`).join(' / '))
 
-    console.log('\n【需求 3】快捷操作按钮组')
-    const primary = light.shortcuts.filter((s) => s.primary)
-    const secondary = light.shortcuts.filter((s) => !s.primary)
-    check('「写文章」为主按钮高亮', primary.length === 1 && primary[0].text === '写文章', primary.map((s) => s.text).join(','))
-    check('其余为次要按钮', secondary.length >= 3, secondary.map((s) => s.text).join(' / '))
-    check('次要按钮为描边样式', secondary.every((s) => s.plain || s.border.includes('solid')), secondary.map((s) => s.border).join(' / '))
-
-    console.log('\n【侧栏】选中项为左侧竖线，不用整块蓝底')
+    console.log('\n【侧栏】选中项为灰底加粗（不用整块品牌蓝）')
     check('存在选中菜单项', !!light.activeMenu, light.activeMenu ? light.activeMenu.text : '(无)')
-    check('选中项背景透明（不是整块蓝底）', light.activeMenu && (light.activeMenu.bg === 'rgba(0, 0, 0, 0)' || light.activeMenu.bg === 'transparent'), light.activeMenu ? light.activeMenu.bg : '')
-    check('选中项有左侧 3px 彩色竖线', light.activeMenu && light.activeMenu.barWidth === '3px' && light.activeMenu.barImage.includes('gradient'), light.activeMenu ? `${light.activeMenu.barWidth} / ${light.activeMenu.barImage.slice(0, 50)}` : '')
-    check('选中项文字为白色', light.activeMenu && light.activeMenu.color === 'rgb(255, 255, 255)', light.activeMenu ? light.activeMenu.color : '')
+    check('选中项用了浅灰底（不是品牌蓝）', light.activeMenu && light.activeMenu.bg !== 'rgba(0, 0, 0, 0)' && light.activeMenu.bg !== 'rgb(59, 130, 246)', light.activeMenu ? light.activeMenu.bg : '')
+    check('选中项不再有彩色竖线（改为整块圆角灰底）', ['auto', '0px'].includes(light.activeMenu ? light.activeMenu.barWidth : 'x') && !(light.activeMenu && light.activeMenu.barImage.includes('gradient')), light.activeMenu ? light.activeMenu.barWidth : '')
+    check('选中项文字为深色（浅底深字）', light.activeMenu && light.activeMenu.color !== 'rgb(255, 255, 255)', light.activeMenu ? light.activeMenu.color : '')
 
     console.log('\n【深色模式】自动适配')
     await evaluate(`(() => { const b = Array.from(document.querySelectorAll('button')).find((el) => el.textContent.includes('深色模式')); if (b) b.click() })()`)
-    await sleep(1600)
+    await sleep(1800)
     const dark = await probe()
+    const darkPanels = JSON.parse(
+      await evaluate(`(() => {
+        const overview = document.querySelector('.overview')
+        const cs = overview ? getComputedStyle(overview) : null
+        return JSON.stringify({
+          bg: cs ? cs.backgroundColor : '',
+          hasCanvas: !!document.querySelector('.trend-canvas canvas'),
+          metricValue: (document.querySelector('.metric-value') || {}).textContent?.trim() || ''
+        })
+      })()`)
+    )
     check('已切换到深色', dark.isDark)
-    check(
-      '深色下卡片底色转深',
-      dark.stats.every((s) => s.bgImage.includes('rgb(23, 26, 33)')),
-      dark.stats[0].bgImage.slice(0, 80)
-    )
-    check('深色下数字仍为主题色', dark.stats.every((s) => s.valueColor !== 'rgb(255, 255, 255)'), dark.stats[0].valueColor)
-    check('深色下图表重新渲染', dark.painted && dark.canvasW > 0 && dark.canvasH > 0, `canvas ${dark.canvasW}x${dark.canvasH}，颜色 ${dark.colors} 种`)
-    check(
-      '深色下状态标签转为浅色字',
-      dark.pills.filter((p) => p.text.includes('已发布')).every((p) => p.color === 'rgb(110, 231, 183)') &&
-        dark.pills.filter((p) => p.text.includes('草稿')).every((p) => p.color === 'rgb(252, 211, 77)'),
-      dark.pills.map((p) => `${p.text}:${p.color}`).join(' / ')
-    )
+    check('深色下面板底色转深', darkPanels.bg.includes('rgb(20, 23, 29)') || darkPanels.bg.includes('rgb(15, 17, 21)'), darkPanels.bg)
+    check('深色下指标数字仍在', darkPanels.metricValue !== '', darkPanels.metricValue)
+    check('深色下图表重新渲染', darkPanels.hasCanvas === true && dark.painted, `canvas ${dark.canvasW}x${dark.canvasH}，颜色 ${dark.colors} 种`)
+    check('深色下状态标签转为浅色字', dark.pills.filter((p) => p.text.includes('已发布')).every((p) => p.color === 'rgb(110, 231, 183)'), dark.pills.map((p) => `${p.text}:${p.color}`).join(' / '))
     if (shotPrefix) await shoot(`${shotPrefix}-dashboard-dark.png`)
     await evaluate(`(() => { const b = Array.from(document.querySelectorAll('button')).find((el) => el.textContent.includes('浅色模式')); if (b) b.click() })()`)
     await sleep(800)
     check('可切回浅色', (await probe()).isDark === false)
-
     console.log(failures === 0 ? '\n仪表盘 UI 检查全部通过 ✅' : `\n共有 ${failures} 项未通过 ❌`)
   } finally {
     proc.kill()

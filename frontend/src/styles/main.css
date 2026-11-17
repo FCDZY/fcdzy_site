@@ -17,6 +17,8 @@
   --shadow-sm: 0 1px 2px rgba(16, 24, 40, 0.06);
   --shadow-md: 0 6px 20px rgba(16, 24, 40, 0.08);
   --header-height: 62px;
+  /* Hero 标题相对顶部的额外下推量（想更靠上就调小，如 6vh） */
+  --hero-offset: 10vh;
 
   /* 语义色：浅色取值与原样式完全一致 */
   --surface-2: #f3f4f6;
@@ -36,8 +38,16 @@
 
   /* ===== 全局固定背景（挂在 body 上） ===== */
   /* 未配置背景图时的默认渐变，后台配置后由站点 store 覆盖为 url(...) */
-  --page-bg-image: linear-gradient(160deg, #eef4ff 0%, #f7f9fc 55%, #ffffff 100%);
-  --page-bg-image-dark: linear-gradient(160deg, #0b1220 0%, #111827 55%, #0f1115 100%);
+  /* 全站底色：淡淡的粉蓝渐变（首页/列表/关于统一，不再用图片当底） */
+  /* 中灰底（B 档）：比纯白稳、又保留轻盈感 */
+  --page-bg-image:
+    radial-gradient(900px 520px at 12% 0%, rgba(233, 220, 232, 0.8) 0%, transparent 60%),
+    radial-gradient(900px 620px at 96% 8%, rgba(214, 224, 242, 0.8) 0%, transparent 58%),
+    linear-gradient(160deg, #e3e6ee 0%, #dfe2eb 55%, #e6e3ea 100%);
+  --page-bg-image-dark:
+    radial-gradient(900px 520px at 12% 0%, rgba(120, 40, 90, 0.4) 0%, transparent 62%),
+    radial-gradient(900px 620px at 96% 8%, rgba(30, 60, 120, 0.45) 0%, transparent 58%),
+    linear-gradient(160deg, #1a1024 0%, #101826 55%, #14101c 100%);
   /* 背景之上的薄纱已移除：页面全程完整展示背景图（不再有整体发白） */
   /* 卡片：毛玻璃（半透明白 + 6px 模糊，通透锐利 + 极淡白色描边），不做白色实底 */
   --surface-card: rgba(255, 255, 255, 0.45);
@@ -58,14 +68,19 @@
   --text-on-dark-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   --text-on-dark-shadow-strong: 0 1px 3px rgba(0, 0, 0, 0.55);
   /* 标签彩色调色板：深色玻璃上用亮色系（深浅主题一致） */
-  --tag-c-0: #7dd3fc;
-  --tag-c-1: #67e8f9;
-  --tag-c-2: #c4b5fd;
-  --tag-c-3: #f9a8d4;
-  --tag-c-4: #fdba74;
-  --tag-c-5: #86efac;
-  --tag-c-6: #fde68a;
-  --tag-c-7: #5eead4;
+  /*
+   * 标签色：浅色主题下从「粉彩亮色」换成「中等饱和深色」，
+   * 因为页面底色已经从纯白改成灰纸，粉彩在上面发飘、看不清。
+   * 全部满足 4.5:1 以上对比度。
+   */
+  --tag-c-0: #0369a1;
+  --tag-c-1: #0e7490;
+  --tag-c-2: #6d28d9;
+  --tag-c-3: #be185d;
+  --tag-c-4: #c2410c;
+  --tag-c-5: #15803d;
+  --tag-c-6: #a16207;
+  --tag-c-7: #0f766e;
   /* Hero 底部渐变层：alpha 已全部置 0 —— 即不叠加任何遮罩，边界两侧都是纯背景，
      衔接完全无痕（无横带、无分割线）。如需极轻微柔化，只改这一个 token 即可 */
   --hero-fade-from: rgba(255, 255, 255, 0);
@@ -271,10 +286,16 @@ img {
 }
 
 /* 直接浮在全局背景图上的文字：与导航栏统一用白字 + 深色描边，保证任意图片上可读 */
-.page-title,
+/* 内页标题：全站已改成浅色渐变底，不再需要白字 + 阴影 */
+.page-title {
+  color: var(--row-title, #1a1a1a);
+  text-shadow: none;
+}
+
 .page-subtitle {
-  color: #fff;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.5);
+  color: var(--meta-faint, #9a9a9a);
+  text-shadow: none;
+  letter-spacing: 1px;
 }
 
 /* 首页板块标题贴在较亮的图片区域，沿用深字 + 浅色描边 */
@@ -795,4 +816,261 @@ html.dark .markdown-body .code-copy.is-copied {
   color: var(--text-3);
   background: var(--code-inline-bg);
   border-radius: 4px;
+}
+/* ===== 吸顶导航的玻璃底色（滚动后才出现）===== */
+:root {
+  --glass-bg: rgba(255, 255, 255, 0.78);
+  /* 颗粒强度：觉得太淡就调大到 0.13~0.16，觉得脏就调到 0.06 */
+  --grain-strength: 0.1;
+  --glass-bg-solid: rgba(255, 255, 255, 0.94);
+  --glass-border: rgba(16, 20, 30, 0.08);
+  --glass-shadow: 0 10px 28px rgba(16, 20, 30, 0.12);
+  /* 吸顶态的导航文字颜色（浅色主题下要变深，否则白字压白底看不见） */
+  --header-fg: #1b2030;
+  --header-fg-dim: rgba(27, 32, 48, 0.74);
+  --header-pill-hover: rgba(16, 20, 30, 0.07);
+  --header-pill-active: rgba(16, 20, 30, 0.12);
+  --header-btn-bg: rgba(16, 20, 30, 0.05);
+  --header-btn-border: rgba(16, 20, 30, 0.14);
+}
+
+html.dark {
+  --glass-bg: rgba(18, 20, 28, 0.62);
+  --grain-strength: 0.075;
+  --glass-bg-solid: rgba(18, 20, 28, 0.92);
+  --glass-border: rgba(255, 255, 255, 0.1);
+  --glass-shadow: 0 10px 30px rgba(0, 0, 0, 0.34);
+  --header-fg: #ffffff;
+  --header-fg-dim: rgba(255, 255, 255, 0.86);
+  --header-pill-hover: rgba(255, 255, 255, 0.14);
+  --header-pill-active: rgba(255, 255, 255, 0.2);
+  --header-btn-bg: rgba(255, 255, 255, 0.12);
+  --header-btn-border: rgba(255, 255, 255, 0.42);
+}
+/* ===== 胶片颗粒：给整站压一层极淡的噪点，把「数字照片」变成「印刷质感」 =====
+ *
+ * 设计约束：
+ * - pointer-events: none —— 永远不拦截点击
+ * - 只有 4.8% 不透明度 —— 平均像素差 < 1/255，细看才有颗粒，绝不发灰
+ * - z-index: 900 —— 盖住内容/导航/回到顶部，但低于弹层（Element Plus 从 2000 起），
+ *   这样图片灯箱、对话框里是干净的，不会被颗粒糊住
+ * - 打印时隐藏 —— 纸质输出不需要噪点
+ * - 不做 mix-blend-mode —— 全屏混合会让滚动时整屏重合成， sacrifices 帧率换一点质感不值得
+ */
+.grain-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 900;
+  pointer-events: none;
+  opacity: var(--grain-strength);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='grain'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.62' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23grain)'/%3E%3C/svg%3E");
+  background-size: 240px 240px;
+  contain: strict;
+}
+
+/* 深色底上颗粒要更淡一点，否则会显得脏 */
+html.dark .grain-layer {
+  opacity: var(--grain-strength);
+}
+
+@media print {
+  .grain-layer {
+    display: none;
+  }
+}
+
+/* 用户要求减少动态/动画时不影响（颗粒本身是静态的，这里只是留个口子） */
+@media (prefers-reduced-motion: reduce) {
+  .grain-layer {
+    opacity: 0.04;
+  }
+}
+/* ==================== 后台皮肤（浅色极简 / 深色跟随） ====================
+ * 参考 Notion / BMAC 的后台：白底、1px 边线、几乎不用阴影、分组侧栏，
+ * 用留白和字重分层，而不是靠彩色块和投影。
+ */
+:root {
+  --admin-main-bg: #fafafa;
+  --admin-aside-bg: #ffffff;
+  --admin-aside-hover: rgba(15, 23, 42, 0.05);
+  --admin-aside-active: rgba(15, 23, 42, 0.07);
+  --admin-header-bg: #ffffff;
+  --admin-line: #ececf0;
+  --admin-line-soft: #f1f1f4;
+  --admin-fg: #111827;
+  --admin-muted: #6b7280;
+  --admin-faint: #a1a1aa;
+  --admin-card-bg: #ffffff;
+  --admin-chip-bg: #f3f4f6;
+}
+
+html.dark {
+  --admin-main-bg: #0c0e12;
+  --admin-aside-bg: #0f1115;
+  --admin-aside-hover: rgba(255, 255, 255, 0.06);
+  --admin-aside-active: rgba(255, 255, 255, 0.1);
+  --admin-header-bg: #0f1115;
+  --admin-line: #1e222b;
+  --admin-line-soft: #191d25;
+  --admin-fg: #e8ebf0;
+  --admin-muted: #9aa3b2;
+  --admin-faint: #5c6472;
+  --admin-card-bg: #14171d;
+  --admin-chip-bg: #1c2029;
+}
+
+/* 侧栏分组标题 */
+.menu-group {
+  margin: 16px 20px 5px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  color: var(--admin-faint);
+  text-transform: uppercase;
+}
+
+/* 卡片：白底 + 1px 边 + 无阴影（后台页面统一） */
+/*
+ * 面板：不要边框，用「贴边 1px + 大扩散」两层柔和阴影做分层。
+ * 边框会切出硬线，阴影能让卡片"浮"在浅灰底上，观感更轻。
+ */
+.admin-page .el-card,
+.admin-page .card,
+.admin-page .panel {
+  background: var(--admin-card-bg);
+  border: 1px solid transparent;
+  border-radius: 16px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.04), 0 10px 28px rgba(16, 24, 40, 0.06);
+}
+
+html.dark .admin-page .el-card,
+html.dark .admin-page .card,
+html.dark .admin-page .panel {
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.35), 0 10px 30px rgba(0, 0, 0, 0.28);
+}
+
+.admin-page .el-card__body {
+  padding: 22px 24px;
+}
+
+/* 表格：极浅分隔线、去斑马纹、表头浅灰小字 */
+.admin-page .el-table,
+.admin-page .el-table th.el-table__cell,
+.admin-page .el-table td.el-table__cell,
+.admin-page .el-table tr {
+  background: transparent;
+  border-color: var(--admin-line-soft);
+}
+
+.admin-page .el-table th.el-table__cell {
+  background: var(--admin-card-bg);
+  color: var(--admin-muted);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
+.admin-page .el-table td.el-table__cell {
+  color: var(--admin-fg);
+  font-size: 13.5px;
+}
+
+.admin-page .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
+  background: transparent;
+}
+
+.admin-page .el-table__body tr:hover > td.el-table__cell {
+  background: var(--admin-aside-hover);
+}
+/* 后台状态标签：深色模式下用更亮的前景色，保证在深底上可读 */
+html.dark .admin-page .status--published {
+  color: #6ee7b7;
+  background: rgba(16, 185, 129, 0.16);
+}
+
+html.dark .admin-page .status--draft {
+  color: #fcd34d;
+  background: rgba(245, 158, 11, 0.18);
+}
+
+html.dark .admin-page .status--scheduled {
+  color: #7dd3fc;
+  background: rgba(14, 165, 233, 0.18);
+}
+/* ==================== 首页（新双栏）深色适配 ==================== */
+/*
+ * 首页卡片/个人卡/薄纱在组件里写的是浅色半透明白，
+ * 深色主题统一在这里覆盖（组件内的 :global 选择器在 scoped 下不生效）。
+ */
+html.dark .home .post,
+html.dark .home .profile,
+html.dark .home .side-card {
+  background: rgba(22, 24, 31, 0.82);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+
+html.dark .home .card-media.is-empty {
+  background-color: rgba(255, 255, 255, 0.04);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.05) 0 7px,
+    transparent 7px 14px
+  );
+}
+
+/* ==================== 首页（A 方案：渐变背景 + 纯白卡片） ==================== */
+
+html.dark .home .post,
+html.dark .home .profile {
+  background: #1b1b24;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 深色下玫红要提亮，否则对比度不足 */
+html.dark .home {
+  --post-title-color: #fb7185;
+  --post-title-hover: #fda4af;
+}
+
+html.dark .home .card-media.is-empty {
+  background-color: rgba(255, 255, 255, 0.04);
+  background-image: repeating-linear-gradient(
+    45deg,
+    rgba(255, 255, 255, 0.05) 0 7px,
+    transparent 7px 14px
+  );
+}
+/* ==================== 首页编辑式列表（新） ==================== */
+:root {
+  /* B 档底比 D 浅，线回到 12% 才看得清；文字保持加深后的色阶 */
+  --row-line: rgba(0, 0, 0, 0.12);
+  --row-hover: rgba(0, 0, 0, 0.03);
+  --row-title: #111111;
+  --row-summary: #333333;
+  --meta-faint: #6b6b6b;
+  --image-line: rgba(0, 0, 0, 0.13);
+}
+
+html.dark {
+  --row-line: rgba(255, 255, 255, 0.08);
+  --row-hover: rgba(255, 255, 255, 0.03);
+  --row-title: #ededed;
+  --row-summary: #a3a3a3;
+  --meta-faint: #7d7d7d;
+  --image-line: rgba(255, 255, 255, 0.12);
+}
+/* ==================== 专题 / 分类页：去掉卡片，走编辑式 ==================== */
+.topic-card,
+.category-card {
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid var(--row-line, rgba(0, 0, 0, 0.08));
+  border-radius: 0;
+  box-shadow: none;
+}
+
+html.dark .topic-card,
+html.dark .category-card {
+  background: transparent;
+  border-bottom-color: var(--row-line);
 }

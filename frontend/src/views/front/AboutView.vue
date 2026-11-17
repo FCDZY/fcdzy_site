@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, watch } from 'vue'
 import { useSiteStore } from '@/stores/site'
+import { IMAGE_PRESETS, optimizeImage } from '@/utils/image'
 import { useSeo } from '@/composables/useSeo'
 
 const site = useSiteStore()
@@ -34,8 +35,8 @@ watch(
       <h1 class="page-title">关于</h1>
       <p class="page-subtitle">关于本站和它的作者</p>
 
-      <section class="card card--dark author-card">
-        <img v-if="site.config.authorAvatar" :src="site.config.authorAvatar" :alt="authorName" class="avatar" />
+      <section class="about-block author-card">
+        <img v-if="site.config.authorAvatar" :src="optimizeImage(site.config.authorAvatar, IMAGE_PRESETS.avatar)" :alt="authorName" class="avatar" />
         <span v-else class="avatar placeholder">{{ authorName.slice(0, 1) }}</span>
         <div class="author-body">
           <h2 class="author-name">{{ authorName }}</h2>
@@ -53,7 +54,7 @@ watch(
         </div>
       </section>
 
-      <section class="card card--dark site-card">
+      <section class="about-block site-card">
         <h2 class="block-title">站点信息</h2>
         <el-descriptions :column="1" border>
           <el-descriptions-item label="站点名称">{{ site.siteName }}</el-descriptions-item>
@@ -274,5 +275,85 @@ watch(
   .block-title {
     font-size: 16.5px;
   }
+}
+
+/* ==================== 编辑式关于页（去掉深色玻璃卡） ==================== */
+.about-block {
+  margin-top: 22px;
+  padding: 22px 0;
+  background: transparent;
+  border-top: 1px solid var(--row-line, rgba(0, 0, 0, 0.08));
+  border-bottom: 1px solid var(--row-line, rgba(0, 0, 0, 0.08));
+}
+
+.about-page .page-title {
+  color: var(--row-title, #1a1a1a);
+}
+
+.about-page .page-subtitle {
+  color: var(--meta-faint, #9a9a9a);
+  letter-spacing: 1px;
+}
+
+.author-card {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+}
+
+.author-name {
+  color: var(--row-title, #1a1a1a);
+}
+
+.author-bio {
+  color: var(--row-summary, #666);
+}
+
+.block-title {
+  margin-bottom: 14px;
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--row-title, #1a1a1a);
+  letter-spacing: 1px;
+}
+
+/* Element Plus 描述表：去掉边框感，只留横线 */
+.about-page :deep(.el-descriptions__body),
+.about-page :deep(.el-descriptions__table),
+.about-page :deep(.el-descriptions__cell) {
+  background: transparent !important;
+}
+
+.about-page :deep(.el-descriptions__cell) {
+  border-color: var(--row-line, rgba(0, 0, 0, 0.08)) !important;
+  color: var(--row-summary, #666);
+}
+
+.about-page :deep(.el-descriptions__label) {
+  color: var(--meta-faint, #9a9a9a) !important;
+  font-weight: 500;
+}
+
+/* 链接与次要按钮：浅底上用墨色/深灰，不再沿用白色 */
+.about-page .link {
+  color: var(--row-summary, #666) !important;
+  text-shadow: none !important;
+}
+
+.about-page .link:hover {
+  color: var(--brand) !important;
+}
+
+.about-page .btn.ghost,
+.about-page .actions .btn:not(.primary) {
+  color: var(--row-summary, #666) !important;
+  border: 1px solid var(--row-line, rgba(0, 0, 0, 0.12)) !important;
+  background: transparent !important;
+  text-shadow: none !important;
+}
+
+.about-page .actions .btn:not(.primary):hover {
+  color: var(--row-title, #1a1a1a) !important;
+  border-color: var(--row-title, #1a1a1a) !important;
 }
 </style>

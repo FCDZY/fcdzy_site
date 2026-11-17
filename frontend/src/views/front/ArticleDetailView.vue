@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, watch, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, watch, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRoute, useRouter } from 'vue-router'
 import { publicApi } from '@/api'
@@ -7,6 +7,14 @@ import type { Article } from '@/types'
 import { useSeo } from '@/composables/useSeo'
 import { formatDate, formatNumber } from '@/utils/format'
 import { formatChars, readingStats } from '@/utils/reading'
+import {
+  clearReadProgress,
+  getReadProgress,
+  measurePercent,
+  saveReadProgress,
+  scrollToPercent
+} from '@/utils/readProgress'
+import { IMAGE_PRESETS, optimizeImage } from '@/utils/image'
 import MarkdownBody from '@/components/MarkdownBody.vue'
 import ArticleComments from '@/components/ArticleComments.vue'
 import ReadingProgress from '@/components/ReadingProgress.vue'
@@ -27,7 +35,17 @@ const article = computed<Article>(() => loaded.value || PLACEHOLDER)
 const publishDate = computed(() => formatDate(article.value.publishedAt || article.value.createdAt))
 
 /** 阅读时长 / 字数（代码块不计入） */
-const stats = computed(() => readingStats(article.value.content))
+/**
+ * 阅读统计：优先用后端随文章返回的值（列表页也是同一份数字，保证口径一致）；
+ * 后端没给时回退到本地计算（老数据 / 接口异常时的兜底）。
+ */
+const stats = computed(() => {
+  const fromApi = Number(article.value.readingMinutes) || 0
+  if (fromApi > 0) {
+    return { minutes: fromApi, chars: Number(article.value.wordCount) || 0 }
+  }
+  return readingStats(article.value.content)
+})
 
 /** 分享链接：始终是当前文章的标准地址 */
 const shareUrl = computed(() => {
@@ -102,9 +120,10 @@ function openViewer(event: MouseEvent) {
   const img = target?.closest?.('.markdown-body img') as HTMLImageElement | null
   if (!img || !img.src) return
   const all = Array.from(document.querySelectorAll<HTMLImageElement>('.markdown-body img'))
-  const urls = all.map((item) => item.currentSrc || item.src).filter(Boolean)
+  // 正文里显示的是压缩版，灯箱里看原图
+  const urls = all.map((item) => item.dataset.rawSrc || item.currentSrc || item.src).filter(Boolean)
   if (!urls.length) return
-  const index = Math.max(0, urls.indexOf(img.currentSrc || img.src))
+  const index = Math.max(0, urls.indexOf(img.dataset.rawSrc || img.currentSrc || img.src))
   viewerUrls.value = urls
   viewerIndex.value = index
   viewerOpen.value = true
@@ -162,6 +181,95 @@ watch(
     load(typeof slug === 'string' ? slug : '')
   },
   { immediate: true }
+)
+
+// ==================== 阅读位置记忆 ====================
+// 规则：
+// - 滚动时（节流 800ms）把正文进度存到 localStorage
+// - 再次进入同一篇文章时，若有 3%~95% 的记录就显示「上次读到 N%」提示
+// - 带 #锚点 打开时不提示（用户目标明确，提示反而碍事）
+const resumeVisible = ref(false)
+const resumePercent = ref(0)
+const resumeTime = ref('')
+let saveTimer = 0
+let resumeSkip = false
+
+function contentEl(): HTMLElement | null {
+  return document.querySelector<HTMLElement>('.content-body .markdown-body')
+}
+
+function persistProgress() {
+  if (!article.value?.slug || !loaded.value) return
+  saveReadProgress(article.value.slug, measurePercent(contentEl()))
+}
+
+function onScrollPersist() {
+  if (saveTimer) return
+  saveTimer = window.setTimeout(() => {
+    saveTimer = 0
+    persistProgress()
+  }, 800)
+}
+
+/** 上次读到的相对时间，用于「（3 天前）」这种说明 */
+function relativeTime(timestamp: number): string {
+  const diff = Date.now() - timestamp
+  const minutes = Math.floor(diff / 60000)
+  if (minutes < 1) return '刚刚'
+  if (minutes < 60) return `${minutes} 分钟前`
+  const hours = Math.floor(minutes / 60)
+  if (hours < 24) return `${hours} 小时前`
+  const days = Math.floor(hours / 24)
+  if (days < 30) return `${days} 天前`
+  return `${Math.floor(days / 30)} 个月前`
+}
+
+function maybeShowResume() {
+  resumeVisible.value = false
+  if (!article.value?.slug || route.hash) return
+  // 正文太短（不到一屏半）就不打扰
+  const element = contentEl()
+  if (!element || element.getBoundingClientRect().height < window.innerHeight * 1.5) return
+  const saved = getReadProgress(article.value.slug)
+  if (!saved) return
+  resumePercent.value = saved.percent
+  resumeTime.value = relativeTime(saved.at)
+  resumeVisible.value = true
+}
+
+function resumeReading() {
+  const element = contentEl()
+  scrollToPercent(element, resumePercent.value)
+  resumeVisible.value = false
+  resumeSkip = true
+}
+
+function dismissResume() {
+  resumeVisible.value = false
+  resumeSkip = true
+  if (article.value?.slug) clearReadProgress(article.value.slug)
+}
+
+onMounted(() => {
+  window.addEventListener('scroll', onScrollPersist, { passive: true })
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('scroll', onScrollPersist)
+  if (saveTimer) window.clearTimeout(saveTimer)
+  // 离开页面时再存一次，避免最后一次滚动还没来得及写
+  if (resumeSkip) return
+  persistProgress()
+})
+
+// 文章渲染完成后判断要不要提示（等 Markdown 和 mermaid 渲染完再量高度）
+watch(
+  () => [loaded.value, article.value?.slug],
+  async () => {
+    if (!loaded.value) return
+    await new Promise((resolve) => window.setTimeout(resolve, 300))
+    maybeShowResume()
+  }
 )
 </script>
 
@@ -245,6 +353,17 @@ watch(
           </header>
 
           <div class="content-body" @click="openViewer">
+            <!-- 上次读到一半：给一条提示，读者自己决定要不要跳（不自动滚动） -->
+            <div v-if="resumeVisible" class="resume-bar">
+              <span class="resume-text">
+                上次读到 {{ resumePercent }}%
+                <span class="resume-sub">（{{ resumeTime }}）</span>
+              </span>
+              <span class="resume-actions">
+                <button type="button" class="resume-btn is-primary" @click="resumeReading">继续阅读</button>
+                <button type="button" class="resume-btn" @click="dismissResume">从头开始</button>
+              </span>
+            </div>
             <MarkdownBody :content="article.content" show-toc />
           </div>
         </article>
@@ -281,7 +400,7 @@ watch(
               class="card topic-card"
               @click="openTopic(topic.slug)"
             >
-              <img v-if="topic.coverImage" :src="topic.coverImage" :alt="topic.name" class="topic-cover" loading="lazy" />
+              <img v-if="topic.coverImage" :src="optimizeImage(topic.coverImage, IMAGE_PRESETS.avatar)" :alt="topic.name" class="topic-cover" loading="lazy" />
               <div class="topic-body">
                 <span class="topic-name">{{ topic.name }}</span>
                 <span class="topic-desc">{{ topic.description || '暂无简介' }}</span>
@@ -602,3 +721,62 @@ watch(
   }
 }
 </style>
+<style scoped>
+/* 上次读到一半的提示条 */
+.resume-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  justify-content: space-between;
+  margin: 0 0 18px;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: var(--text-2);
+  background: var(--surface-2, rgba(127, 127, 127, 0.08));
+  border: 1px solid var(--card-border);
+  border-left: 3px solid var(--brand, #4f7cf7);
+  border-radius: 8px;
+}
+
+.resume-text {
+  font-weight: 500;
+  color: var(--text-1);
+}
+
+.resume-sub {
+  font-weight: 400;
+  color: var(--text-3);
+}
+
+.resume-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.resume-btn {
+  padding: 4px 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  cursor: pointer;
+  background: transparent;
+  border: 1px solid var(--card-border);
+  border-radius: 6px;
+  transition: all 0.18s ease;
+}
+
+.resume-btn:hover {
+  color: var(--brand, #4f7cf7);
+  border-color: var(--brand, #4f7cf7);
+}
+
+.resume-btn.is-primary {
+  color: #fff;
+  background: var(--brand, #4f7cf7);
+  border-color: var(--brand, #4f7cf7);
+}
+
+.resume-btn.is-primary:hover {
+  filter: brightness(1.08);
+}</style>

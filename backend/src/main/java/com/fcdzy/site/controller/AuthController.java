@@ -6,6 +6,7 @@ import com.fcdzy.site.dto.LoginRequest;
 import com.fcdzy.site.dto.LoginResponse;
 import com.fcdzy.site.dto.ProfileUpdateResponse;
 import com.fcdzy.site.service.AuthService;
+import jakarta.servlet.http.HttpServletRequest;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.security.core.Authentication;
@@ -28,8 +29,10 @@ public class AuthController {
 
     /** 管理员登录，返回 JWT，前端需放在 Authorization: Bearer &lt;token&gt; 请求头 */
     @PostMapping("/login")
-    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request) {
-        return ApiResponse.ok(authService.login(request));
+    public ApiResponse<LoginResponse> login(@Valid @RequestBody LoginRequest request,
+                                            HttpServletRequest httpRequest) {
+        // 用真实来源 IP 做失败限流（反向代理下取 X-Forwarded-For 第一跳）
+        return ApiResponse.ok(authService.login(request, PublicCommentController.resolveIp(httpRequest)));
     }
 
     @GetMapping("/me")

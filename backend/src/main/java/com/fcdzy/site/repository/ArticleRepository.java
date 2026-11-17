@@ -37,4 +37,31 @@ public interface ArticleRepository extends JpaRepository<Article, Long>, JpaSpec
     @Modifying
     @Query(value = "delete from article_tag where tag_id = :tagId", nativeQuery = true)
     int deleteTagRelations(@Param("tagId") Long tagId);
+
+    // ===================== 回收站（软删除） =====================
+    // 实体上有 @SQLRestriction("deleted_at is null")，普通查询看不到回收站数据，
+    // 所以下面这些用原生 SQL 显式操作 deleted_at。
+
+    /** slug 是否被占用（包含回收站里的，避免唯一索引冲突） */
+    @Query(value = "select count(*) from article where slug = :slug", nativeQuery = true)
+    long countBySlugIncludingTrashed(@Param("slug") String slug);
+
+    @Query(value = "select * from article where deleted_at is not null order by deleted_at desc limit :limit offset :offset",
+            nativeQuery = true)
+    List<Article> findTrashed(@Param("limit") int limit, @Param("offset") int offset);
+
+    @Query(value = "select count(*) from article where deleted_at is not null", nativeQuery = true)
+    long countTrashed();
+
+    @Modifying
+    @Query(value = "update article set deleted_at = null where id = :id and deleted_at is not null", nativeQuery = true)
+    int restoreFromTrash(@Param("id") Long id);
+
+    @Modifying
+    @Query(value = "delete from article where id = :id and deleted_at is not null", nativeQuery = true)
+    int purgeFromTrash(@Param("id") Long id);
+
+    @Modifying
+    @Query(value = "delete from article where deleted_at is not null and deleted_at < :before", nativeQuery = true)
+    int purgeTrashedBefore(@Param("before") java.time.LocalDateTime before);
 }

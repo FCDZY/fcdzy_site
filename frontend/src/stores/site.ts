@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
 import { publicApi } from '@/api'
+import { IMAGE_PRESETS, optimizeImage, viewportHeroOptions } from '@/utils/image'
 import type { Category, SiteConfig, Tag, Topic } from '@/types'
 import { SITE_NAME, SITE_SUBTITLE } from '@/constants/site'
 
@@ -70,10 +71,41 @@ export const useSiteStore = defineStore('site', () => {
         link.rel = 'icon'
         document.head.appendChild(link)
       }
-      link.href = favicon
+      // favicon 只要 64px 就够，原始 152KB 太大
+      link.href = optimizeImage(favicon, IMAGE_PRESETS.favicon)
     }
   }
 
+/** 预加载图片（插 <link rel=preload>），同一地址只插一次 */
+const preloaded = new Set<string>()
+function preloadImage(url: string) {
+  if (!url || preloaded.has(url)) return
+  preloaded.add(url)
+  const link = document.createElement('link')
+  link.rel = 'preload'
+  link.as = 'image'
+  link.href = url
+  try {
+    link.fetchPriority = 'high'
+  } catch {
+    /* 老浏览器忽略 */
+  }
+  document.head.appendChild(link)
+}
+
+/** 预加载并返回是否成功（成功后好把占位图换成正图） */
+function warmImage(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof Image === 'undefined') {
+      resolve(false)
+      return
+    }
+    const image = new Image()
+    image.onload = () => resolve(true)
+    image.onerror = () => resolve(false)
+    image.src = url
+  })
+}
   function setMeta(attr: 'name' | 'property', key: string, content: string) {
     let meta = document.head.querySelector<HTMLMetaElement>(`meta[${attr}="${key}"]`)
     if (!meta) {
@@ -91,24 +123,16 @@ export const useSiteStore = defineStore('site', () => {
    * - homeHeroAnimation 控制背景薄纱的呼吸动画开关
    */
   function applyPageBackground() {
+    /*
+     * 全站统一为浅色渐变背景（不再使用后台的 Hero 图当页面底图）：
+     * Hero 图只出现在首页 Hero 区，底色由 main.css 的 --page-bg-image 渐变承担，
+     * 这样首页/列表页/关于页的气质一致，也不会有「图片在正文后面干扰阅读」的问题。
+     */
     const root = document.documentElement
-    const light = (config.value.homeHeroImage || '').trim()
-    const dark = (config.value.homeHeroImageDark || '').trim()
-
-    const setOrRemove = (name: string, value: string) => {
-      if (value) {
-        root.style.setProperty(name, `url("${value}")`)
-      } else {
-        root.style.removeProperty(name)
-      }
-    }
-
-    setOrRemove('--page-bg-image', light)
-    setOrRemove('--page-bg-image-dark', dark || light)
-
-    root.classList.toggle('has-page-bg', Boolean(light || dark))
-    root.classList.toggle('page-bg-breath', (config.value.homeHeroAnimation ?? 'true') !== 'false')
-  }
+    root.style.removeProperty('--page-bg-image')
+    root.style.removeProperty('--page-bg-image-dark')
+    root.classList.remove('has-page-bg')
+    root.classList.remove('page-bg-breath')  }
 
   function categoryById(id?: number | null) {
     if (!id) return null

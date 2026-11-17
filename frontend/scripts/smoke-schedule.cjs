@@ -250,7 +250,7 @@ const PROBE_EDITOR = `(() => {
 
       await send('Page.navigate', { url: `${BASE}/` })
       await sleep(1200)
-      await evaluate(`localStorage.setItem('fcdzy_admin_token', ${JSON.stringify(token)})`)
+      await evaluate(`localStorage.setItem('fcdzy_admin_token', ${JSON.stringify(token)}); localStorage.setItem('fcdzy_skip_preflight', '1')`)
 
       // --- 编辑器 ---
       await send('Page.navigate', { url: `${BASE}/yzdcf/articles/new` })
@@ -349,7 +349,17 @@ const PROBE_EDITOR = `(() => {
         await sleep(400)
         if (await evaluate("!!document.querySelector('.el-table__row')")) break
       }
-      await sleep(1500)
+      // 列表页改成「已发布/草稿/定时/回收站」Tabs，默认停在已发布，
+      // 定时文章要点「定时」这个 Tab 才看得到
+      await evaluate(`(() => {
+        const tab = Array.from(document.querySelectorAll('.status-tab')).find((t) => t.textContent.includes('定时'))
+        if (tab) tab.click()
+      })()`)
+      for (let i = 0; i < 30; i++) {
+        await sleep(300)
+        if (await evaluate("!!Array.from(document.querySelectorAll('.el-table__row')).find((r) => r.textContent.includes('定时UI-'))")) break
+      }
+      await sleep(1200)
       const listState = JSON.parse(
         await evaluate(`(() => {
           const rows = Array.from(document.querySelectorAll('.el-table__row'))
@@ -391,27 +401,28 @@ const PROBE_EDITOR = `(() => {
       await send('Page.navigate', { url: `${BASE}/yzdcf` })
       for (let i = 0; i < 40; i++) {
         await sleep(400)
-        if (await evaluate("!!document.querySelector('.stat-value')")) break
+        if (await evaluate("!!document.querySelector('.mini')")) break
       }
       await sleep(1500)
+      // 新版仪表盘把「定时发布」放进了「内容构成」的 4 个小卡里
       const dash = JSON.parse(
         await evaluate(`(() => {
-          const cards = Array.from(document.querySelectorAll('.stat')).map((el) => ({
-            label: (el.querySelector('.stat-label') || {}).textContent || '',
-            value: (el.querySelector('.stat-value') || {}).textContent || ''
+          const cards = Array.from(document.querySelectorAll('.mini-card')).map((el) => ({
+            label: (el.querySelector('.mini-label') || {}).textContent || '',
+            value: (el.querySelector('.mini-value') || {}).textContent || ''
           }))
           return JSON.stringify({ count: cards.length, cards })
         })()`)
       )
       const statsApi = await api('GET', '/admin/stats')
       const scheduledCard = dash.cards.find((c) => c.label.includes('定时'))
-      console.log('\n【仪表盘】定时发布卡片')
-      check('统计卡共 8 张', dash.count === 8, `${dash.count} 张`)
-      check('存在「定时发布」卡片', !!scheduledCard, dash.cards.map((c) => c.label).join(' / '))
+      console.log('\n【仪表盘】定时发布数字')
+      check('内容构成共 4 个小卡', dash.count === 4, dash.count + ' 个')
+      check('存在「定时发布」卡', !!scheduledCard, dash.cards.map((c) => c.label).join(' / '))
       check(
         '定时数与接口一致',
         scheduledCard && Number(scheduledCard.value) === statsApi.data.scheduledCount,
-        `卡片=${scheduledCard?.value} 接口=${statsApi.data.scheduledCount}`
+        `卡片=${scheduledCard && scheduledCard.value} 接口=${statsApi.data.scheduledCount}`
       )
     } finally {
       proc.kill()

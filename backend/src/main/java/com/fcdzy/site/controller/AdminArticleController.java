@@ -69,9 +69,33 @@ public class AdminArticleController {
         return ApiResponse.ok(articleService.cancelSchedule(id));
     }
 
+    /** 删除 = 移入回收站（可还原） */
     @DeleteMapping("/{id}")
     public ApiResponse<Void> delete(@PathVariable Long id) {
         articleService.delete(id);
+        return ApiResponse.ok();
+    }
+
+    // ==================== 回收站 ====================
+
+    /** 回收站列表（按删除时间倒序） */
+    @GetMapping("/trash")
+    public ApiResponse<PageResult<ArticleDto>> trash(@RequestParam(defaultValue = "1") int page,
+                                                    @RequestParam(defaultValue = "10") int size) {
+        return ApiResponse.ok(articleService.trashedList(page, size));
+    }
+
+    /** 从回收站还原 */
+    @PutMapping("/{id}/restore")
+    public ApiResponse<Void> restore(@PathVariable Long id) {
+        articleService.restore(id);
+        return ApiResponse.ok();
+    }
+
+    /** 彻底删除（不可恢复） */
+    @DeleteMapping("/{id}/purge")
+    public ApiResponse<Void> purge(@PathVariable Long id) {
+        articleService.purge(id);
         return ApiResponse.ok();
     }
 }

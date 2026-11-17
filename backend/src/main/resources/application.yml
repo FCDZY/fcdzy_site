@@ -76,6 +76,9 @@ site:
   # 定时发布轮询间隔（毫秒），默认 30 秒；单实例部署，不依赖 Redis/MQ
   schedule:
     poll-ms: 30000
+    # 回收站：超过这么多天的已删除文章会被彻底清理（每天检查一次）
+    trash-retain-days: 30
+    trash-clean-ms: 86400000
 
   # 阿里云 OSS 图片存储（后端中转上传）
   # AccessKey 属于敏感信息：只写在 application-local.yml 的 site.oss.access-key-id / access-key-secret
@@ -104,6 +107,9 @@ site:
     username: ${ADMIN_USERNAME:admin}
     password: ${ADMIN_PASSWORD:change-me-on-first-run}
     nickname: 站长
+    # 登录防爆破：同 IP 连续失败 N 次后锁定 M 分钟（锁定期间密码正确也拒绝）
+    login-max-attempts: ${LOGIN_MAX_ATTEMPTS:5}
+    login-lock-minutes: ${LOGIN_LOCK_MINUTES:10}
 
   comment:
     # 新评论通知邮件的收件人（站长）

@@ -24,6 +24,31 @@ public class CommentCreateRequest {
     /** 回复某条评论时传其 id；为空表示对文章发表一级评论 */
     private Long parentId;
 
+    /**
+     * 蜜罐字段：前端隐藏输入框，真人不可能填。
+     * 非空即判定为机器人，直接静默丢弃（返回成功但不入库）。
+     */
+    private String hp;
+
+    /** 从打开表单到提交的耗时（毫秒）；过小说明是脚本直接提交 */
+    private Long elapsedMs;
+
+    public String getHp() {
+        return hp;
+    }
+
+    public void setHp(String hp) {
+        this.hp = hp;
+    }
+
+    public Long getElapsedMs() {
+        return elapsedMs;
+    }
+
+    public void setElapsedMs(Long elapsedMs) {
+        this.elapsedMs = elapsedMs;
+    }
+
     public String getNickname() {
         return nickname;
     }

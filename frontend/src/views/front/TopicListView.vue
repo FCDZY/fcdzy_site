@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { watch } from 'vue'
 import { useSiteStore } from '@/stores/site'
+import { IMAGE_PRESETS, optimizeImage } from '@/utils/image'
 import { useSeo } from '@/composables/useSeo'
 
 const site = useSiteStore()
@@ -31,7 +32,7 @@ watch(
           class="card topic-card"
           :to="`/topic/${item.slug}`"
         >
-          <img v-if="item.coverImage" :src="item.coverImage" :alt="item.name" class="cover" loading="lazy" />
+          <img v-if="item.coverImage" :src="optimizeImage(item.coverImage, IMAGE_PRESETS.cover)" :alt="item.name" class="cover" loading="lazy" />
           <div v-else class="cover placeholder">{{ item.name.slice(0, 1) }}</div>
           <div class="body">
             <span class="name">{{ item.name }}</span>

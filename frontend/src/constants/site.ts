@@ -9,3 +9,10 @@ export const SITE_NAME = 'FCDZY个人博客'
 
 /** 目前不显示副标题，留空即可 */
 export const SITE_SUBTITLE = ''
+/**
+ * 浏览器标签页用的短名。
+ *
+ * 和 SITE_NAME 分开：标签页太窄，"FCDZY个人博客" 会被浏览器截断成 "FCDZY个…"，
+ * 页脚/登录页/关于页仍然用完整名字。
+ */
+export const SITE_SHORT_NAME = 'FCDZY'

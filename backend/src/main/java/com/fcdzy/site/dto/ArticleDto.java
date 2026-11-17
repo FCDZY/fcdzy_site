@@ -1,6 +1,7 @@
 package com.fcdzy.site.dto;
 
 import com.fcdzy.site.entity.Article;
+import com.fcdzy.site.util.MarkdownUtils;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -29,6 +30,12 @@ public class ArticleDto {
     private LocalDateTime schedulePublishTime;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
+    /** 软删除时间：只有回收站里的文章才有值 */
+    private LocalDateTime deletedAt;
+    /** 正文字数（剔除代码/图片/表格，与前端同一套规则） */
+    private int wordCount;
+    /** 预计阅读分钟数 */
+    private int readingMinutes;
 
     public static ArticleDto of(Article article, boolean withContent) {
         ArticleDto dto = new ArticleDto();
@@ -47,6 +54,11 @@ public class ArticleDto {
         dto.schedulePublishTime = article.getSchedulePublishTime();
         dto.createdAt = article.getCreatedAt();
         dto.updatedAt = article.getUpdatedAt();
+        dto.deletedAt = article.getDeletedAt();
+        // 阅读时长：实时算（正文本来就在内存里，不额外查库；不存字段，避免数据变脏）
+        MarkdownUtils.ReadingStats reading = MarkdownUtils.readingStats(article.getContent());
+        dto.wordCount = reading.chars();
+        dto.readingMinutes = reading.minutes();
         return dto;
     }
 
@@ -136,6 +148,30 @@ public class ArticleDto {
 
     public LocalDateTime getUpdatedAt() {
         return updatedAt;
+    }
+
+    public int getWordCount() {
+        return wordCount;
+    }
+
+    public void setWordCount(int wordCount) {
+        this.wordCount = wordCount;
+    }
+
+    public int getReadingMinutes() {
+        return readingMinutes;
+    }
+
+    public void setReadingMinutes(int readingMinutes) {
+        this.readingMinutes = readingMinutes;
+    }
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
     }
 
     /** 上一篇 / 下一篇导航 */

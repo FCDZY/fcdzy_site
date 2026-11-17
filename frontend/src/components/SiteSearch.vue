@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { nextTick, ref } from 'vue'
+import { nextTick, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 
 /**
@@ -55,6 +55,29 @@ function onEsc() {
   open.value = false
   inputRef.value?.blur()
 }
+
+/* ==================== 快捷键 ==================== */
+/* 按 / 或 Ctrl(⌘)+K 直接聚焦搜索；正在输入框里打字时不抢键 */
+function isTyping(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null
+  if (!el || !el.tagName) return false
+  const tag = el.tagName
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable === true
+}
+
+function onHotkey(event: KeyboardEvent) {
+  if (event.isComposing) return
+  const key = event.key
+  const slash = key === '/' && !event.ctrlKey && !event.metaKey && !event.altKey
+  const commandK = (event.ctrlKey || event.metaKey) && key.toLowerCase() === 'k'
+  if (!slash && !commandK) return
+  if (isTyping(event.target)) return
+  event.preventDefault()
+  expand()
+}
+
+onMounted(() => window.addEventListener('keydown', onHotkey))
+onBeforeUnmount(() => window.removeEventListener('keydown', onHotkey))
 </script>
 
 <template>
@@ -76,9 +99,10 @@ function onEsc() {
       <button
         class="search-btn"
         type="button"
-        :aria-label="open ? '搜索' : '展开搜索'"
+        :aria-label="open ? '搜索' : '展开搜索（快捷键 / 或 Ctrl+K）'"
         :aria-expanded="open"
-        :title="open ? '搜索（回车）' : '搜索'"
+        aria-keyshortcuts="Slash Control+K"
+        :title="open ? '搜索（回车）' : '搜索（按 / 或 Ctrl+K）'"
         @click="onIconClick"
       >
         <el-icon :size="18"><Search /></el-icon>

@@ -210,11 +210,57 @@ public class ArticleService {
         return ArticleDto.of(articleRepository.save(article), true);
     }
 
+    /**
+     * 删除文章 = 移入回收站（软删除）。
+     *
+     * <p>实体上有 @SQLRestriction("deleted_at is null")，所以置上 deleted_at 之后
+     * 前台、后台列表、sitemap、统计都会自动看不到它；回收站里可以还原或彻底删除。</p>
+     */
     @Transactional
     public void delete(Long id) {
         Article article = get(id);
+        // 专题排序里的关联也一并清掉，避免回收站文章还占着专题位
         topicArticleRepository.deleteByArticleId(id);
-        articleRepository.delete(article);
+        article.setDeletedAt(LocalDateTime.now());
+        articleRepository.save(article);
+    }
+
+    /** 回收站分页（原生查询，绕开 @SQLRestriction） */
+    @Transactional(readOnly = true)
+    public PageResult<ArticleDto> trashedList(int page, int size) {
+        int pageIndex = pageIndex(page);
+        int pageSize = clampSize(size);
+        long total = articleRepository.countTrashed();
+        List<ArticleDto> list = total == 0
+                ? List.of()
+                : articleRepository.findTrashed(pageSize, pageIndex * pageSize).stream()
+                        .map(a -> ArticleDto.of(a, false))
+                        .toList();
+        int pages = pageSize <= 0 ? 0 : (int) Math.ceil((double) total / pageSize);
+        return new PageResult<>(list, total, pageIndex + 1, pageSize, pages);
+    }
+
+    /** 从回收站还原（恢复后重新出现在列表里） */
+    @Transactional
+    public void restore(Long id) {
+        if (articleRepository.restoreFromTrash(id) == 0) {
+            throw BizException.notFound("回收站里没有这篇文章");
+        }
+    }
+
+    /** 彻底删除（不可恢复；评论等关联由外键级联清理） */
+    @Transactional
+    public void purge(Long id) {
+        if (articleRepository.purgeFromTrash(id) == 0) {
+            throw BizException.notFound("回收站里没有这篇文章");
+        }
+    }
+
+    /** 清理超过保留天数的回收站文章，返回删除条数 */
+    @Transactional
+    public int purgeExpiredTrash(int retainDays) {
+        LocalDateTime before = LocalDateTime.now().minusDays(Math.max(1, retainDays));
+        return articleRepository.purgeTrashedBefore(before);
     }
 
     @Transactional
@@ -295,9 +341,10 @@ public class ArticleService {
     private void applyRequest(Article article, ArticleSaveRequest request, Long selfId) {
         article.setTitle(request.title().trim());
         article.setSlug(SlugUtils.uniqueSlug(request.slug(), request.title(),
-                slug -> articleRepository.findBySlug(slug)
-                        .filter(exist -> selfId == null || !exist.getId().equals(selfId))
-                        .isPresent()));
+                // 用「含回收站」的判断：软删除的文章仍占着唯一索引，否则新建同 slug 会撞库。
+                // selfId 是编辑中的文章自身，允许保留自己的 slug。
+                slug -> articleRepository.countBySlugIncludingTrashed(slug) > 0
+                        && !slug.equals(article.getSlug())));
         article.setContent(request.content());
         String summary = request.summary();
         article.setSummary(summary == null || summary.isBlank()

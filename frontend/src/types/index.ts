@@ -64,6 +64,12 @@ export interface Article {
   prev?: ArticleNav | null
   next?: ArticleNav | null
   publishedAt?: string | null
+  /** 软删除时间（回收站里有值） */
+  deletedAt?: string | null
+  /** 正文字数（后端算好，剔除代码/图片/表格） */
+  wordCount?: number
+  /** 预计阅读分钟数 */
+  readingMinutes?: number
   createdAt?: string | null
   updatedAt?: string | null
 }
@@ -169,6 +175,10 @@ export interface CommentForm {
   content: string
   /** 回复某条评论时传其 id */
   parentId?: number | null
+  /** 蜜罐字段（前端隐藏），非空时后端按脚本丢弃 */
+  hp?: string
+  /** 打开表单到提交的耗时（毫秒） */
+  elapsedMs?: number
 }
 
 /** 后台评论（含邮箱、IP、审核状态） */

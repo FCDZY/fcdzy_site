@@ -263,6 +263,26 @@ public class SiteProperties {
         private String username = "admin";
         private String password = "admin123";
         private String nickname = "站长";
+        /** 同一 IP 连续登录失败多少次后锁定 */
+        private int loginMaxAttempts = 5;
+        /** 锁定时长（分钟）；锁定期间即使密码正确也拒绝 */
+        private int loginLockMinutes = 10;
+
+        public int getLoginMaxAttempts() {
+            return loginMaxAttempts;
+        }
+
+        public void setLoginMaxAttempts(int loginMaxAttempts) {
+            this.loginMaxAttempts = loginMaxAttempts;
+        }
+
+        public int getLoginLockMinutes() {
+            return loginLockMinutes;
+        }
+
+        public void setLoginLockMinutes(int loginLockMinutes) {
+            this.loginLockMinutes = loginLockMinutes;
+        }
 
         public String getUsername() {
             return username;

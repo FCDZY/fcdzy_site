@@ -27,11 +27,19 @@ const failed = ref('')
 const countAll = ref(0)
 
 const formRef = ref<HTMLFormElement | null>(null)
-const form = reactive({ nickname: '', email: '', content: '' })
+const form = reactive({ nickname: '', email: '', content: '', website: '' })
 const submitting = ref(false)
 const submitted = ref(false)
 const replyTarget = ref<Comment | null>(null)
 const replyInputRef = ref<HTMLTextAreaElement | null>(null)
+
+/**
+ * 防垃圾评论：
+ * - form.website 是蜜罐字段（视觉隐藏），真人看不到也不会填，机器人会填 → 后端静默丢弃
+ * - 记录进入页面到提交的耗时，脚本通常瞬间提交
+ */
+const openedAt = Date.now()
+const elapsedMs = () => Date.now() - openedAt
 
 const remaining = computed(() => MAX_CONTENT - form.content.length)
 const replyPlaceholder = computed(() =>
@@ -140,7 +148,10 @@ async function submit() {
       nickname: form.nickname.trim(),
       email: form.email.trim() || undefined,
       content: form.content.trim(),
-      parentId: replyTarget.value ? replyTarget.value.id : undefined
+      parentId: replyTarget.value ? replyTarget.value.id : undefined,
+      // 蜜罐 + 提交耗时，交给后端判定是否为脚本
+      hp: form.website || undefined,
+      elapsedMs: elapsedMs()
     })
     submitted.value = true
     replyTarget.value = null
@@ -186,6 +197,18 @@ watch(
       <div class="form-row">
         <el-input v-model="form.nickname" :maxlength="MAX_NICKNAME" placeholder="昵称（必填）" class="field" />
         <el-input v-model="form.email" maxlength="120" placeholder="邮箱（选填，不会公开）" class="field" />
+      </div>
+      <!-- 蜜罐字段：视觉隐藏，真人看不见；机器人会自动填 → 后端静默丢弃 -->
+      <div class="hp-wrap" aria-hidden="true">
+        <label for="comment-website">个人网站（请勿填写）</label>
+        <input
+          id="comment-website"
+          v-model="form.website"
+          name="website"
+          type="text"
+          tabindex="-1"
+          autocomplete="off"
+        />
       </div>
       <el-input
         ref="replyInputRef"
@@ -256,6 +279,16 @@ watch(
 </template>
 
 <style scoped>
+/* 蜜罐：移出视口、不可聚焦，真人看不到也点不到 */
+.hp-wrap {
+  position: absolute;
+  left: -9999px;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  opacity: 0;
+  pointer-events: none;
+}
 .comments {
   margin-top: 18px;
   padding: 22px 24px 24px;

@@ -11,6 +11,7 @@ import type { Article, ArticleForm, Category, Tag } from '@/types'
 import ImageUploader from '@/components/admin/ImageUploader.vue'
 import { validateImageFile } from '@/utils/upload'
 import { extractHeadings, type HeadingItem } from '@/utils/headings'
+import { checkArticle, checkImages, imageUrlsOf } from '@/utils/preflight'
 
 const props = defineProps<{ id?: string }>()
 
@@ -282,6 +283,47 @@ async function loadArticle() {
   fillForm(article)
 }
 
+/**
+ * 发布前自检：锚点失效 / 标题跳级 / 代码块没语言 / 空链接 / 图片没 alt / 图片打不开。
+ *
+ * 只是提醒，不阻止发布：返回 true 表示「继续保存」，false 表示用户点了取消。
+ */
+const checking = ref(false)
+
+async function runPreflight(): Promise<boolean> {
+  if (checking.value) return true
+  // 自动化测试会设置这个标记跳过确认框（不影响真实使用）
+  try {
+    if (localStorage.getItem('fcdzy_skip_preflight') === '1') return true
+  } catch {
+    /* 隐私模式忽略 */
+  }
+  checking.value = true
+  try {
+    const issues = checkArticle(form.content)
+    const imageFailures = await checkImages(imageUrlsOf(form.content))
+    for (const url of imageFailures) {
+      issues.push({ level: 'warn', text: `图片无法加载：${url}` })
+    }
+    if (issues.length === 0) return true
+
+    const lines = issues.map((item) => `· ${item.text}`).join('\n')
+    try {
+      await ElMessageBox.confirm(lines, `发布前检查发现 ${issues.length} 个问题`, {
+        type: 'warning',
+        confirmButtonText: '仍然保存',
+        cancelButtonText: '返回修改',
+        customClass: 'preflight-box'
+      })
+      return true
+    } catch {
+      return false
+    }
+  } finally {
+    checking.value = false
+  }
+}
+
 async function submit(status: 'DRAFT' | 'SCHEDULED' | 'PUBLISHED') {
   if (!formRef.value) return
   const valid = await formRef.value.validate().catch(() => false)
@@ -298,6 +340,10 @@ async function submit(status: 'DRAFT' | 'SCHEDULED' | 'PUBLISHED') {
       return
     }
   }
+
+  // 发布前自检：只提醒、不阻止（有问题的文章仍然可以选择发布）
+  if (!(await runPreflight())) return
+
   submitting.value = true
   try {
     const payload = buildPayload(status)

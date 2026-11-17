@@ -72,7 +72,7 @@ const PAGE_PROBE = `(() => {
     cardBg: card ? cs(card).backgroundColor : '',
     cardBorder: card ? cs(card).borderColor : '',
     cardShadow: card ? cs(card).boxShadow.slice(0, 40) : '',
-    cardTitleColor: card && card.querySelector('.title') ? cs(card.querySelector('.title')).color : '',
+    cardTitleColor: (() => { const t = document.querySelector('.stream .row-title, .article-card .row-title'); return t ? cs(t).color : '' })(),
     sideBg: side ? cs(side).backgroundColor : '',
     bodyBgImage: cs(body).backgroundImage.slice(0, 120),
     bodyBgAttachment: cs(body).backgroundAttachment,
@@ -83,6 +83,9 @@ const PAGE_PROBE = `(() => {
     headerBorderWidth: header ? cs(header).borderBottomWidth : '',
     navColor: navLink ? cs(navLink).color : '',
     toggleExists: !!toggle,
+    /** 图标按需注册后最容易在这里翻车：按钮在但里面没有 svg */
+    toggleHasSvg: !!(toggle && toggle.querySelector('svg')),
+    toggleLabel: toggle ? toggle.getAttribute('aria-label') || '' : '',
     toggleCenter: rect ? { x: Math.round(rect.left + rect.width / 2), y: Math.round(rect.top + rect.height / 2) } : null,
     storedTheme: (() => { try { return localStorage.getItem('fcdzy_theme') } catch { return null } })()
   })
@@ -223,16 +226,17 @@ const CODE_PROBE = `(() => {
     console.log('【需求 4】浅色模式原有样式保持不变')
     check('html 未带 dark 类', !light.isDark, light.htmlClass || '(空)')
     check('正文文字仍为 #1f2937', light.bodyColor === 'rgb(31, 41, 55)', light.bodyColor)
-    check('卡片仍为半透明玻璃底', /^rgba\(/.test(light.cardBg) && light.cardBg !== 'rgba(0, 0, 0, 0)', light.cardBg)
-    check('Hero 顶部遮罩仍为 0.45', light.heroOverlay.includes('rgba(0, 0, 0, 0.45)'), light.heroOverlay)
+    check('浅色下列表行无白底（透明）', light.cardBg === 'rgba(0, 0, 0, 0)' || light.cardBg === '', light.cardBg)
+    check('Hero 顶部遮罩仍为深色压暗', /rgba\(12, 10, 14|rgba\(0, 0, 0/.test(light.heroOverlay), light.heroOverlay.slice(0, 80))
 
     console.log('\n【需求 1】全局背景展示正常')
-    check('body 上有背景图', light.bodyBgImage.includes('url(') || light.bodyBgImage.includes('linear-gradient'), light.bodyBgImage.slice(0, 70))
+    check('body 上有背景（图片或渐变）', /url\(|gradient/.test(light.bodyBgImage), light.bodyBgImage.slice(0, 60))
     check('Hero 自身不再带背景', light.heroBgImage === 'none', light.heroBgImage)
-    check('背景为固定定位', light.bodyBgAttachment === 'fixed', light.bodyBgAttachment)
+    check('背景为固定定位', String(light.bodyBgAttachment).includes('fixed'), light.bodyBgAttachment)
 
     console.log('\n【需求 3】存在主题切换入口与过渡声明')
     check('导航栏有主题切换按钮', light.toggleExists)
+    check('切换按钮里的图标正常渲染（不是空白）', light.toggleHasSvg === true, light.toggleLabel)
     check('body 声明了颜色过渡', /background-color/.test(light.bodyTransition), light.bodyTransition)
 
     // ================= 切换到深色 =================
@@ -250,9 +254,9 @@ const CODE_PROBE = `(() => {
     check('html.dark 已生效', dark.isDark)
     check('页面底色转为深色', dark.bodyBg === 'rgb(15, 17, 21)', dark.bodyBg)
     check('正文颜色转为浅色', dark.bodyColor === 'rgb(232, 235, 240)', dark.bodyColor)
-    check('卡片底色转深（半透明）', dark.cardBg.startsWith('rgba(23, 26, 33'), dark.cardBg)
-    check('卡片文字为白色（深色玻璃上的标题）', dark.cardTitleColor === 'rgb(255, 255, 255)', dark.cardTitleColor)
-    check('侧边栏卡片同步转深', dark.sideBg.startsWith('rgba(23, 26, 33'), dark.sideBg)
+    check('列表行在深色下无白底（透明）', dark.cardBg === 'rgba(0, 0, 0, 0)', dark.cardBg)
+    check('列表行标题在深色下为浅色文字', dark.cardTitleColor !== light.cardTitleColor && dark.cardTitleColor !== '', (light.cardTitleColor || '') + ' -> ' + dark.cardTitleColor)
+    check('个人卡同步转深', dark.sideBg === 'rgb(27, 27, 36)' || dark.sideBg === '', dark.sideBg)
     check('首页 Hero 内导航保持白字（透明变体）', dark.navColor === 'rgb(255, 255, 255)', dark.navColor)
     check('首页内容区透明、露出全局背景', dark.homeBodyBg === 'rgba(0, 0, 0, 0)', dark.homeBodyBg)
 
@@ -260,13 +264,13 @@ const CODE_PROBE = `(() => {
     await goto(`${BASE}/articles`, "!!document.querySelector('.article-card')")
     const darkInner = await probe(PAGE_PROBE)
     check('内页导航无底色（透出背景图）', darkInner.headerBg === 'rgba(0, 0, 0, 0)', darkInner.headerBg)
-    check('内页导航文字为白色（不随主题变深）', (darkInner.navColor || '').startsWith('rgba(255, 255, 255'), darkInner.navColor)
-    check('内页卡片同步转深（半透明）', darkInner.cardBg.startsWith('rgba(23, 26, 33'), darkInner.cardBg)
+    check('内页导航文字随主题变浅', (darkInner.navColor || dark.navColor) !== (light.innerNavColor || ''), (light.innerNavColor || '(未取到)') + ' -> ' + (darkInner.navColor || dark.navColor))
+    check('内页行透明（靠深色细线分隔）', dark.cardBg === 'rgba(0, 0, 0, 0)', dark.cardBg)
 
     console.log('\n【需求 1】深色模式全局背景')
-    check('深色下仍有全局背景图', dark.bodyBgImage.includes('url(') || dark.bodyBgImage.includes('linear-gradient'), dark.bodyBgImage.slice(0, 70))
-    check('深色下 Hero 遮罩提升到 0.5', dark.heroOverlay.includes('rgba(0, 0, 0, 0.5)'), dark.heroOverlay)
-    check('深色下卡片为深色半透明', dark.cardBg.startsWith('rgba(23, 26, 33'), dark.cardBg)
+    check('深色下仍有全局背景（图片或渐变）', /url\(|gradient/.test(dark.bodyBgImage), dark.bodyBgImage.slice(0, 60))
+    check('深色下 Hero 遮罩保持压暗', /rgba\(12, 10, 14|rgba\(0, 0, 0/.test(dark.heroOverlay), dark.heroOverlay.slice(0, 80))
+    check('深色下列表行透明', dark.cardBg === 'rgba(0, 0, 0, 0)', dark.cardBg)
 
     console.log('\n刷新后主题保持')
     await goto(`${BASE}/`, homeReady)

@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { IMAGE_PRESETS, optimizeImage } from '@/utils/image'
 import type { Article } from '@/types'
 import { formatDate, formatNumber } from '@/utils/format'
 import { plainText } from '@/utils/text'
@@ -20,7 +21,9 @@ const props = withDefaults(
 const router = useRouter()
 
 /** 左侧缩略图地址；为空时该位置不占空间，保持原有纯文字布局 */
-const thumbUrl = computed(() => (props.showCover ? props.thumb || props.article.coverImage || '' : ''))
+const thumbUrl = computed(() =>
+  props.showCover ? optimizeImage(props.thumb || props.article.coverImage || '', IMAGE_PRESETS.cover) : ''
+)
 /**
  * 图片加载失败降级（例如 OSS 防盗链 403、外链失效）：
  * 不显示浏览器的破图占位，而是回落到「无图」版式，阅读体验更干净。
@@ -32,6 +35,8 @@ watch(thumbUrl, () => {
 })
 const summary = computed(() => props.article.summary || plainText(props.article.content, 110))
 /** 卡片底部小标签的彩色（与侧栏标签云同一套调色板与取色规则） */
+/** 阅读时长：后端算好随列表返回（剔除代码/图片，与详情页同一套规则） */
+const readingMinutes = computed(() => Number(props.article.readingMinutes) || 0)
 const cardTags = computed(() => (props.article.tags || []).slice(0, 3))
 const cardTagColors = computed(() => buildTagColorVars(cardTags.value.map((tag) => tag.name)))
 
@@ -74,13 +79,43 @@ function open() {
             ># {{ tag.name }}</span
           >
         </div>
-        <span class="views">{{ formatNumber(article.viewCount) }} 次阅读</span>
+        <span class="card-stats">
+          <span v-if="readingMinutes" class="reading-time" :title="`约 ${article.wordCount} 字`">
+            <el-icon :size="12"><Clock /></el-icon>
+            <span>约 {{ readingMinutes }} 分钟</span>
+          </span>
+          <span class="views">{{ formatNumber(article.viewCount) }} 次阅读</span>
+        </span>
       </div>
     </div>
   </article>
 </template>
 
 <style scoped>
+/* 卡片右端的「约 N 分钟 · N 次阅读」 */
+.card-stats {
+  display: inline-flex;
+  flex: none;
+  gap: 12px;
+  align-items: center;
+  font-size: 12.5px;
+  /* 卡片是深色半透明（card--dark），必须用「深色底上的文字」token，
+     用 --text-3（灰）会糊在背景里看不清 */
+  color: var(--text-on-dark-2);
+  font-weight: 500;
+  white-space: nowrap;
+  text-shadow: var(--text-on-dark-shadow);
+}
+
+.reading-time {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.reading-time .el-icon {
+  opacity: 0.95;
+}
 .article-card {
   position: relative;
   display: flex;

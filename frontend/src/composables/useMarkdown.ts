@@ -2,6 +2,7 @@ import MarkdownIt from 'markdown-it'
 import hljs from 'highlight.js/lib/common'
 import DOMPurify from 'dompurify'
 import { normalizeAnchor } from '@/utils/anchor'
+import { IMAGE_PRESETS, optimizeImage } from '@/utils/image'
 import { plainText } from '@/utils/text'
 
 export { plainText }
@@ -250,6 +251,14 @@ export function renderMarkdown(content?: string | null): RenderResult {
     })
     root.querySelectorAll('img').forEach((img) => {
       img.setAttribute('loading', 'lazy')
+      img.setAttribute('decoding', 'async')
+      // OSS 图片走实时缩放 + WebP；原图地址留在 data-raw-src，灯箱用它看大图
+      const raw = img.getAttribute('src') || ''
+      const optimized = optimizeImage(raw, IMAGE_PRESETS.content)
+      if (optimized && optimized !== raw) {
+        img.setAttribute('data-raw-src', raw)
+        img.setAttribute('src', optimized)
+      }
     })
   }
   return { html: root ? root.innerHTML : clean, toc }

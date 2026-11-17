@@ -2,17 +2,17 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import * as echarts from 'echarts/core'
 import { LineChart } from 'echarts/charts'
-import { GridComponent, TooltipComponent } from 'echarts/components'
+import { GridComponent, MarkLineComponent, TooltipComponent } from 'echarts/components'
 import { CanvasRenderer } from 'echarts/renderers'
 import type { ViewTrend } from '@/types'
 import { useTheme } from '@/composables/useTheme'
 
 /**
- * 近 7 天阅读趋势（面积折线图）。
+ * 阅读趋势（纯折线 + 平均线，不再填充面积）。
  * - 按需引入 ECharts 模块，只有本页会加载
  * - 跟随主题切换配色，容器尺寸变化自动 resize，卸载时 dispose
  */
-echarts.use([LineChart, GridComponent, TooltipComponent, CanvasRenderer])
+echarts.use([LineChart, GridComponent, MarkLineComponent, TooltipComponent, CanvasRenderer])
 
 const props = defineProps<{ trend: ViewTrend | null; loading?: boolean }>()
 
@@ -24,6 +24,12 @@ let observer: ResizeObserver | null = null
 const points = computed(() => props.trend?.points ?? [])
 const hasData = computed(() => (props.trend?.total ?? 0) > 0)
 const total = computed(() => props.trend?.total ?? 0)
+/** 区间平均值：只算有数据的天数（总阅读 ÷ 天数），用于画橙色均值线 */
+const average = computed(() => {
+  const values = points.value.map((point) => Number(point.views) || 0)
+  if (!values.length) return 0
+  return Math.round(values.reduce((a, b) => a + b, 0) / values.length)
+})
 
 function buildOption() {
   const dark = isDark.value
@@ -31,7 +37,7 @@ function buildOption() {
   const values = points.value.map((p) => p.views)
 
   return {
-    grid: { left: 8, right: 14, top: 18, bottom: 6, containLabel: true },
+    grid: { left: 8, right: 26, top: 20, bottom: 6, containLabel: true },
     tooltip: {
       trigger: 'axis',
       backgroundColor: dark ? 'rgba(23,26,33,.94)' : '#ffffff',
@@ -67,26 +73,40 @@ function buildOption() {
       {
         name: '阅读量',
         type: 'line',
-        smooth: true,
+        // 只取一点点平滑：点少的时候强平滑会"造出"不存在的峰
+        smooth: 0.15,
         showSymbol: true,
         symbol: 'circle',
-        symbolSize: 6,
+        symbolSize: 5,
         data: values,
         lineStyle: {
-          width: 2.5,
+          width: 2,
           color: new echarts.graphic.LinearGradient(0, 0, 1, 0, [
             { offset: 0, color: '#3b82f6' },
             { offset: 1, color: '#8b5cf6' }
           ])
         },
-        itemStyle: { color: '#6366f1', borderColor: dark ? '#171a21' : '#ffffff', borderWidth: 2 },
-        areaStyle: {
-          color: new echarts.graphic.LinearGradient(0, 0, 0, 1, [
-            { offset: 0, color: 'rgba(99,102,241,.28)' },
-            { offset: 1, color: 'rgba(99,102,241,.02)' }
-          ])
-        },
-        emphasis: { scale: 1.4, itemStyle: { color: '#4f46e5' } }
+        itemStyle: { color: '#6366f1', borderColor: dark ? '#14171d' : '#ffffff', borderWidth: 2 },
+        // 不再填充面积：7~14 个点时面积会把小波动放大成"暴涨"
+        areaStyle: null,
+        emphasis: { scale: 1.6, itemStyle: { color: '#4f46e5' } },
+        // 平均线：橙色虚线，和蓝紫阅读线明确区分
+        markLine: {
+          silent: true,
+          symbol: 'none',
+          lineStyle: { color: '#f59e0b', type: 'dashed', width: 1.4, opacity: 0.9 },
+          label: {
+            position: 'insideEndTop',
+            formatter: '平均 ' + average.value,
+            color: '#d97706',
+            fontSize: 11.5,
+            fontWeight: 600,
+            backgroundColor: dark ? 'rgba(20,23,29,.9)' : 'rgba(255,255,255,.92)',
+            padding: [2, 5],
+            borderRadius: 4
+          },
+          data: [{ yAxis: average.value }]
+        }
       }
     ],
     animationDuration: 600,
@@ -130,13 +150,7 @@ watch([() => props.trend, isDark], () => render())
 
 <template>
   <div class="trend">
-    <div class="trend-head">
-      <div class="trend-title">
-        <span>近 7 天阅读趋势</span>
-        <span class="trend-total">共 {{ total }} 次</span>
-      </div>
-      <span v-if="trend && !hasData" class="trend-hint">统计从今天开始累积</span>
-    </div>
+    <p v-if="trend && !hasData" class="trend-hint">统计从今天开始累积</p>
     <div ref="chartEl" class="trend-canvas" />
     <div v-if="loading && !trend" class="trend-loading">加载中…</div>
   </div>
@@ -175,9 +189,10 @@ watch([() => props.trend, isDark], () => render())
   color: var(--text-3);
 }
 
+/* 图表区域：加高到 340px，折线不再被压成横条（和仪表盘面板高度匹配） */
 .trend-canvas {
   width: 100%;
-  height: 240px;
+  height: 340px;
 }
 
 .trend-loading {

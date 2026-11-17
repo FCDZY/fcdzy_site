@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
+import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { adminApi } from '@/api'
 import type { Article, Stats, ViewTrend } from '@/types'
@@ -7,73 +8,133 @@ import { formatDate } from '@/utils/format'
 import ReadingTrendChart from '@/components/ReadingTrendChart.vue'
 
 /**
- * 后台仪表盘：数据概览（7 张主题色统计卡）+ 近 7 天阅读趋势 + 最近更新 + 快捷操作。
- * 只做 UI 层重构，菜单结构与页面功能保持不变。
+ * 后台仪表盘
+ *
+ *   上排：一张卡片里「阅读趋势（折线 + 均值线）」+「关键指标（三行等分，细线分隔）」
+ *   下排：最近更新（表格）+ 内容构成（4 个数字 + 前端异常状态块），两卡等高
+ *
+ * 只做 UI 层，接口与数据结构不变。
  */
-interface StatCard {
-  key: keyof Stats
-  label: string
-  icon: string
-  /** 主色：顶部色条 / 图标 / 数字 */
-  color: string
-  /** 卡片底色微渐变（同主色的极低透明度） */
-  tint: string
-}
-
 const router = useRouter()
 
 const loading = ref(false)
 const stats = ref<Stats | null>(null)
 const recent = ref<Article[]>([])
 const trend = ref<ViewTrend | null>(null)
+/** 趋势天数：接口支持 ?days=N，默认 14 天（7 天太短，两个 0 会让折线很空） */
+const days = ref(14)
 
-const cards: StatCard[] = [
-  { key: 'articleCount', label: '文章总数', icon: 'Document', color: '#3b82f6', tint: 'rgba(59,130,246,.10)' },
-  { key: 'publishedCount', label: '已发布', icon: 'Select', color: '#10b981', tint: 'rgba(16,185,129,.10)' },
-  { key: 'draftCount', label: '草稿', icon: 'EditPen', color: '#f59e0b', tint: 'rgba(245,158,11,.12)' },
-  { key: 'scheduledCount', label: '定时发布', icon: 'Clock', color: '#0ea5e9', tint: 'rgba(14,165,233,.10)' },
-  { key: 'categoryCount', label: '分类数', icon: 'FolderOpened', color: '#6366f1', tint: 'rgba(99,102,241,.10)' },
-  { key: 'tagCount', label: '标签数', icon: 'PriceTag', color: '#ec4899', tint: 'rgba(236,72,153,.10)' },
-  { key: 'topicCount', label: '专题数', icon: 'Collection', color: '#14b8a6', tint: 'rgba(20,184,166,.10)' },
-  { key: 'totalViews', label: '总阅读量', icon: 'View', color: '#ef4444', tint: 'rgba(239,68,68,.10)' }
-]
-
-const shortcuts = [
-  { label: '写文章', path: '/yzdcf/articles/new', icon: 'EditPen', primary: true },
-  { label: '分类管理', path: '/yzdcf/categories', icon: 'FolderOpened', primary: false },
-  { label: '标签管理', path: '/yzdcf/tags', icon: 'PriceTag', primary: false },
-  { label: '专题管理', path: '/yzdcf/topics', icon: 'Collection', primary: false },
-  { label: '站点配置', path: '/yzdcf/settings', icon: 'Setting', primary: false }
-]
+const clientErrors = ref<Array<{ id: number; message: string; url?: string | null; createdAt: string }>>([])
+const clientErrorCount = ref(0)
 
 const statusMap = {
   DRAFT: { label: '草稿', className: 'status--draft' },
-  PUBLISHED: { label: '已发布', className: 'status--published' }
-}
-
-function statValue(key: keyof Stats): number {
-  return stats.value ? stats.value[key] : 0
+  PUBLISHED: { label: '已发布', className: 'status--published' },
+  SCHEDULED: { label: '定时', className: 'status--scheduled' }
 }
 
 function statusOf(status?: string) {
-  return statusMap[status as 'DRAFT' | 'PUBLISHED'] || statusMap.DRAFT
+  return statusMap[status as 'DRAFT' | 'PUBLISHED' | 'SCHEDULED'] || statusMap.DRAFT
+}
+
+function statValue(key: keyof Stats): number {
+  return stats.value ? Number(stats.value[key]) || 0 : 0
+}
+
+/** 11-02 至 11-15 · 合计 880 次 */
+const trendRange = computed(() => {
+  const points = trend.value?.points || []
+  if (!points.length) return ''
+  return points[0].label + ' 至 ' + points[points.length - 1].label
+})
+
+const trendTotal = computed(() =>
+  (trend.value?.points || []).reduce((sum, point) => sum + (Number(point.views) || 0), 0)
+)
+
+/**
+ * 环比：把区间对半分，比较后一半与前一半的阅读量。
+ * 用绝对值而不是百分比——数据量小时百分比会失真（前一周某天是 0 会算出 480%）。
+ */
+const trendDelta = computed(() => {
+  const values = (trend.value?.points || []).map((point) => Number(point.views) || 0)
+  if (values.length < 4) return null
+  const half = Math.floor(values.length / 2)
+  const prev = values.slice(0, half).reduce((a, b) => a + b, 0)
+  const current = values.slice(half).reduce((a, b) => a + b, 0)
+  if (prev === 0 && current === 0) return null
+  return current - prev
+})
+
+/** 上排右侧：3 个关键指标（只有总阅读量带环比小字） */
+const metrics = computed(() => {
+  const delta = trendDelta.value
+  const halfDays = Math.floor(days.value / 2)
+  return [
+    {
+      label: '总阅读量',
+      value: statValue('totalViews'),
+      color: '#0ea5e9',
+      sub: delta === null ? '' : (delta >= 0 ? '+' : '−') + Math.abs(delta) + ' 次较前 ' + halfDays + ' 天',
+      positive: delta === null ? null : delta >= 0
+    },
+    { label: '总文章数', value: statValue('articleCount'), color: '#6366f1', sub: '', positive: null },
+    { label: '已发布', value: statValue('publishedCount'), color: '#10b981', sub: '', positive: null }
+  ]
+})
+
+/** 下排右侧：4 个数字（标签数已移除，把空间让给前端异常块） */
+const miniCards = computed(() => [
+  { label: '草稿', value: statValue('draftCount') },
+  { label: '定时发布', value: statValue('scheduledCount') },
+  { label: '分类', value: statValue('categoryCount') },
+  { label: '专题', value: statValue('topicCount') }
+])
+
+async function loadTrend() {
+  try {
+    trend.value = await adminApi.viewTrend(days.value)
+  } catch {
+    trend.value = null
+  }
+}
+
+async function changeDays(next: number) {
+  if (days.value === next) return
+  days.value = next
+  await loadTrend()
 }
 
 async function load() {
   loading.value = true
   try {
-    const [statData, articlePage, trendData] = await Promise.all([
+    const [statData, articlePage, trendData, errorCount, errorList] = await Promise.all([
       adminApi.stats(),
       adminApi.articleList({ page: 1, size: 5 }),
-      adminApi.viewTrend(7)
+      adminApi.viewTrend(days.value),
+      adminApi.clientErrorCount().catch(() => 0),
+      adminApi.clientErrors(5).catch(() => [])
     ])
     stats.value = statData
     recent.value = articlePage.list || []
     trend.value = trendData
+    clientErrorCount.value = Number(errorCount) || 0
+    clientErrors.value = errorList || []
   } catch {
     // 提示由 api 层处理
   } finally {
     loading.value = false
+  }
+}
+
+async function clearClientErrors() {
+  try {
+    await adminApi.clearClientErrors()
+    clientErrors.value = []
+    clientErrorCount.value = 0
+    ElMessage.success('已清空前端错误记录')
+  } catch {
+    // 提示由 api 层处理
   }
 }
 
@@ -82,285 +143,488 @@ onMounted(load)
 
 <template>
   <div v-loading="loading" class="admin-page dashboard">
-    <!-- 数据概览：7 张主题色统计卡 -->
-    <section class="panel">
-      <header class="panel-head">
-        <h2 class="panel-title">数据概览</h2>
-        <el-button text :icon="'Refresh'" @click="load">刷新</el-button>
-      </header>
-
-      <div class="stat-grid">
-        <article
-          v-for="card in cards"
-          :key="card.key"
-          class="stat"
-          :style="{ '--accent': card.color, '--tint': card.tint }"
-        >
-          <span class="stat-accent" aria-hidden="true" />
-          <span class="stat-icon">
-            <el-icon :size="16"><component :is="card.icon" /></el-icon>
-          </span>
-          <div class="stat-value">{{ statValue(card.key) }}</div>
-          <div class="stat-label">{{ card.label }}</div>
-        </article>
+    <!-- 上排：趋势 + 指标合成一张卡 -->
+    <section class="panel overview">
+      <div class="overview-main">
+        <header class="panel-head">
+          <h2 class="panel-title">阅读趋势</h2>
+          <div class="head-right">
+            <span v-if="trendRange" class="head-meta">{{ trendRange }} · 合计 {{ trendTotal }} 次</span>
+            <div class="days-switch">
+              <button
+                v-for="option in [7, 14, 30]"
+                :key="option"
+                type="button"
+                class="days-btn"
+                :class="{ 'is-on': days === option }"
+                @click="changeDays(option)"
+              >
+                {{ option }} 天
+              </button>
+            </div>
+          </div>
+        </header>
+        <ReadingTrendChart :trend="trend" :loading="loading" />
       </div>
+
+      <aside class="overview-metrics">
+        <header class="panel-head">
+          <h2 class="panel-title">关键指标</h2>
+          <el-button text :icon="'Refresh'" @click="load">刷新</el-button>
+        </header>
+        <div class="metrics">
+          <div v-for="item in metrics" :key="item.label" class="metric-row">
+            <div class="metric-left">
+              <span class="metric-dot" :style="{ background: item.color }" />
+              <span class="metric-label">{{ item.label }}</span>
+            </div>
+            <div class="metric-right">
+              <span class="metric-value">{{ item.value }}</span>
+              <span
+                v-if="item.sub"
+                class="metric-sub"
+                :class="{ 'is-up': item.positive === true, 'is-down': item.positive === false }"
+                >{{ item.sub }}</span
+              >
+            </div>
+          </div>
+        </div>
+      </aside>
     </section>
 
-    <!-- 近 7 天阅读趋势 -->
-    <section class="panel">
-      <ReadingTrendChart :trend="trend" :loading="loading" />
-    </section>
+    <!-- 下排：最近更新 + 内容构成（等高） -->
+    <div class="bottom-row">
+      <section class="panel recent-panel">
+        <header class="panel-head">
+          <h2 class="panel-title">最近更新</h2>
+          <el-button text type="primary" @click="router.push('/yzdcf/articles')">查看全部</el-button>
+        </header>
 
-    <!-- 最近更新 -->
-    <section class="panel">
-      <header class="panel-head">
-        <h2 class="panel-title">最近更新</h2>
-        <el-button text type="primary" @click="router.push('/yzdcf/articles')">查看全部</el-button>
-      </header>
+        <el-table :data="recent" class="recent-table" style="width: 100%">
+          <el-table-column prop="title" label="标题" min-width="200" show-overflow-tooltip />
+          <el-table-column label="状态" width="100">
+            <template #default="{ row }">
+              <span class="status" :class="statusOf(row.status).className">{{ statusOf(row.status).label }}</span>
+            </template>
+          </el-table-column>
+          <el-table-column label="更新时间" width="150">
+            <template #default="{ row }">{{ formatDate(row.updatedAt || row.createdAt, true) }}</template>
+          </el-table-column>
+          <el-table-column label="操作" width="70" align="center">
+            <template #default="{ row }">
+              <el-button text type="primary" size="small" @click="router.push(`/yzdcf/articles/${row.id}/edit`)">
+                编辑
+              </el-button>
+            </template>
+          </el-table-column>
+        </el-table>
+      </section>
 
-      <el-table :data="recent" stripe class="recent-table" style="width: 100%">
-        <el-table-column prop="title" label="标题" min-width="240" show-overflow-tooltip />
-        <el-table-column label="状态" width="110">
-          <template #default="{ row }">
-            <span class="status" :class="statusOf(row.status).className">{{ statusOf(row.status).label }}</span>
-          </template>
-        </el-table-column>
-        <el-table-column label="更新时间" width="170">
-          <template #default="{ row }">{{ formatDate(row.updatedAt || row.createdAt, true) }}</template>
-        </el-table-column>
-        <el-table-column label="操作" width="90" align="center">
-          <template #default="{ row }">
-            <el-button
-              text
-              type="primary"
-              size="small"
-              @click="router.push({ name: 'admin-article-edit', params: { id: row.id } })"
-            >
-              编辑
+      <section class="panel side-panel">
+        <header class="panel-head">
+          <h2 class="panel-title">内容构成</h2>
+        </header>
+
+        <div class="mini-grid">
+          <div v-for="item in miniCards" :key="item.label" class="mini-card">
+            <span class="mini-label">{{ item.label }}</span>
+            <span class="mini-value">{{ item.value }}</span>
+          </div>
+        </div>
+
+        <!-- 前端异常：正常只显示状态，有错误时展开明细 -->
+        <div class="error-block">
+          <div class="error-head">
+            <span class="error-dot" :class="{ 'is-bad': clientErrorCount > 0 }" />
+            <span class="error-title">前端异常</span>
+            <span class="error-count">
+              {{ clientErrorCount > 0 ? `近 24 小时 ${clientErrorCount} 条` : '近 24 小时 0 条' }}
+            </span>
+            <el-button v-if="clientErrorCount > 0" text type="danger" size="small" @click="clearClientErrors">
+              清空
             </el-button>
-          </template>
-        </el-table-column>
-        <template #empty>
-          <div class="empty-text">暂无文章，先去写一篇吧</div>
-        </template>
-      </el-table>
-    </section>
-
-    <!-- 快捷操作 -->
-    <section class="panel">
-      <header class="panel-head">
-        <h2 class="panel-title">快捷操作</h2>
-      </header>
-      <div class="shortcuts">
-        <el-button
-          v-for="item in shortcuts"
-          :key="item.path"
-          :type="item.primary ? 'primary' : 'default'"
-          :plain="!item.primary"
-          :icon="item.icon"
-          :class="{ 'is-primary': item.primary }"
-          @click="router.push(item.path)"
-        >
-          {{ item.label }}
-        </el-button>
-      </div>
-    </section>
+          </div>
+          <p v-if="!clientErrors.length" class="error-hint">
+            最近没有前端报错。用户端出错时，这里会记录错误信息与出错页面。
+          </p>
+          <details v-else class="error-details">
+            <summary>查看明细</summary>
+            <ul class="error-list">
+              <li v-for="item in clientErrors" :key="item.id" class="error-item">
+                <div class="error-msg">{{ item.message }}</div>
+                <div class="error-meta">
+                  <span v-if="item.url">{{ item.url }}</span>
+                  <span>{{ formatDate(item.createdAt, true) }}</span>
+                </div>
+              </li>
+            </ul>
+          </details>
+        </div>
+      </section>
+    </div>
   </div>
 </template>
 
 <style scoped>
-.dashboard {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+/* ==================== 上排：趋势 + 指标 ==================== */
+.overview {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 262px;
+  column-gap: 26px;
+  padding: 22px 26px 20px;
 }
 
-/* ===== 面板 ===== */
-.panel {
-  padding: 16px 18px 18px;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--card);
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
-  transition: background-color 0.3s ease, border-color 0.3s ease;
+.overview-main {
+  min-width: 0;
+}
+
+/* 右侧指标：与图表等高，用虚线分隔 */
+.overview-metrics {
+  display: flex;
+  flex-direction: column;
+  padding-left: 24px;
+  border-left: 1px dashed var(--admin-line-soft);
+}
+
+.head-right {
+  display: flex;
+  gap: 14px;
+  align-items: center;
+}
+
+.head-meta {
+  font-size: 12px;
+  color: var(--admin-faint);
+  white-space: nowrap;
+}
+
+/* 天数切换 */
+.days-switch {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--admin-chip-bg);
+  border-radius: 8px;
+}
+
+.days-btn {
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--admin-muted);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  transition: background-color 0.16s ease, color 0.16s ease;
+}
+
+.days-btn.is-on {
+  font-weight: 600;
+  color: var(--admin-fg);
+  background: var(--admin-card-bg);
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.08);
+}
+
+/* 三行等分 + 极浅细分隔线 */
+.metrics {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+.metric-row {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  border-bottom: 1px solid var(--admin-line-soft);
+}
+
+.metric-row:last-child {
+  border-bottom: 0;
+}
+
+.metric-left {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.metric-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+}
+
+.metric-label {
+  font-size: 12.5px;
+  color: var(--admin-muted);
+  white-space: nowrap;
+}
+
+.metric-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+}
+
+.metric-value {
+  font-size: 26px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--admin-fg);
+}
+
+.metric-sub {
+  margin-top: 2px;
+  font-size: 11px;
+  color: var(--admin-faint);
+  white-space: nowrap;
+}
+
+.metric-sub.is-up {
+  font-weight: 600;
+  color: #10b981;
+}
+
+.metric-sub.is-down {
+  font-weight: 600;
+  color: #ef4444;
+}
+
+/* ==================== 下排：两卡等高 ==================== */
+.bottom-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(0, 1fr);
+  gap: 18px;
+  margin-top: 18px;
+  align-items: stretch;
 }
 
 .panel-head {
   display: flex;
+  gap: 14px;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 14px;
+  /* 标题行左右内缩，和表格首列 / 卡片内文字对齐（原来贴着边框） */
+  padding: 0 12px 12px;
 }
 
 .panel-title {
   margin: 0;
   font-size: 15px;
   font-weight: 600;
-  color: var(--text-1);
+  letter-spacing: 0;
+  color: var(--admin-muted);
 }
 
-/* ===== 统计卡 ===== */
-.stat-grid {
+/* 图表面板头部：右边要放区间文案和切换，别让它缩 */
+.overview .panel-head {
+  padding: 0 0 10px;
+}
+
+.recent-panel,
+.side-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.recent-table {
+  --el-table-border-color: transparent;
+}
+
+/* 内容构成：4 个数字 2×2 */
+.mini-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(148px, 1fr));
-  gap: 12px;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  padding: 0 12px;
 }
 
-.stat {
-  position: relative;
-  padding: 15px 14px 13px;
-  border-radius: 8px;
-  overflow: hidden;
-  /* 极淡主题色渐变打底，避免「纯白死板」 */
-  background: linear-gradient(180deg, var(--tint) 0%, var(--card) 72%);
-  border: 1px solid var(--border);
-  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.06), 0 4px 12px rgba(16, 24, 40, 0.04);
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-}
-
-.stat:hover {
-  transform: translateY(-2px);
-  border-color: color-mix(in srgb, var(--accent) 32%, var(--border));
-  box-shadow: 0 2px 4px rgba(16, 24, 40, 0.08), 0 10px 22px rgba(16, 24, 40, 0.08);
-}
-
-/* 顶部主题色细条 */
-.stat-accent {
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 3px;
-  background: var(--accent);
-  opacity: 0.85;
-}
-
-.stat-icon {
-  display: inline-flex;
+/* 一行一个：标签在左、数字在右，卡片变矮，把高度让给下面的前端异常块 */
+.mini-card {
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
   align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 8px;
-  color: var(--accent);
-  background: var(--tint);
+  justify-content: space-between;
+  padding: 13px 16px;
+  background: var(--admin-main-bg);
+  border: 1px solid var(--admin-line);
+  border-radius: 12px;
 }
 
-.stat-value {
-  margin-top: 10px;
-  font-size: 28px;
-  font-weight: 800;
-  line-height: 1.15;
-  letter-spacing: -0.5px;
-  color: var(--accent);
-  font-variant-numeric: tabular-nums;
-}
-
-.stat-label {
-  margin-top: 2px;
+.mini-label {
   font-size: 12.5px;
-  color: var(--text-3);
+  color: var(--admin-muted);
 }
 
-/* ===== 最近更新表格：弱化表头、极淡斑马纹 ===== */
-.recent-table :deep(.el-table__header-wrapper th.el-table__cell) {
-  background: transparent;
-  border-bottom: 1px solid var(--border);
-  color: var(--text-3);
-  font-weight: 600;
+.mini-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--admin-fg);
 }
 
-.recent-table :deep(.el-table__cell) {
-  border-bottom-color: transparent;
+/* 前端异常：吃掉下排剩余高度（数字卡变矮后这里更宽敞） */
+.error-block {
+  flex: 1;
+  margin: 12px 12px 0;
+  padding: 14px 16px;
+  background: var(--admin-main-bg);
+  border: 1px solid var(--admin-line);
+  border-radius: 12px;
 }
 
-.recent-table :deep(.el-table__row--striped td.el-table__cell) {
-  background: rgba(16, 24, 40, 0.022);
-}
-
-.recent-table :deep(.el-table__body tr:hover > td.el-table__cell) {
-  background: rgba(59, 130, 246, 0.06);
-}
-
-html.dark .recent-table :deep(.el-table__row--striped td.el-table__cell) {
-  background: rgba(255, 255, 255, 0.028);
-}
-
-html.dark .recent-table :deep(.el-table__body tr:hover > td.el-table__cell) {
-  background: rgba(96, 165, 250, 0.1);
-}
-
-/* 状态小标签：圆角胶囊 + 已发布绿 / 草稿橙 */
-.status {
-  display: inline-flex;
+.error-head {
+  display: flex;
+  gap: 8px;
   align-items: center;
-  gap: 5px;
-  padding: 2px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 600;
-  line-height: 1.7;
 }
 
-.status::before {
-  content: '';
-  width: 5px;
-  height: 5px;
+.error-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
   border-radius: 50%;
-  background: currentColor;
+  background: #10b981;
+}
+
+.error-dot.is-bad {
+  background: #ef4444;
+}
+
+.error-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--admin-fg);
+}
+
+.error-count {
+  margin-left: auto;
+  font-size: 11.5px;
+  color: var(--admin-faint);
+}
+
+.error-hint {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--admin-faint);
+}
+
+.error-details {
+  margin-top: 8px;
+}
+
+.error-details summary {
+  font-size: 12px;
+  color: var(--admin-muted);
+  cursor: pointer;
+}
+
+.error-list {
+  max-height: 180px;
+  margin: 8px 0 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.error-item {
+  padding: 7px 0;
+  border-bottom: 1px dashed var(--admin-line);
+}
+
+.error-item:last-child {
+  border-bottom: none;
+}
+
+.error-msg {
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--admin-fg);
+  word-break: break-word;
+}
+
+.error-meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 2px;
+  font-size: 11.5px;
+  color: var(--admin-faint);
+}
+
+/* 状态标签 */
+.status {
+  display: inline-block;
+  padding: 1px 9px;
+  font-size: 11.5px;
+  border-radius: 999px;
 }
 
 .status--published {
-  color: #047857;
-  background: rgba(16, 185, 129, 0.14);
+  color: #10b981;
+  background: rgba(16, 185, 129, 0.1);
 }
 
 .status--draft {
-  color: #b45309;
-  background: rgba(245, 158, 11, 0.16);
+  color: #f59e0b;
+  background: rgba(245, 158, 11, 0.12);
 }
 
-html.dark .status--published {
-  color: #6ee7b7;
-  background: rgba(16, 185, 129, 0.2);
+.status--scheduled {
+  color: #0ea5e9;
+  background: rgba(14, 165, 233, 0.1);
 }
 
-html.dark .status--draft {
-  color: #fcd34d;
-  background: rgba(245, 158, 11, 0.2);
-}
-
-/* ===== 快捷操作 ===== */
-.shortcuts {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-}
-
-.shortcuts :deep(.el-button + .el-button) {
-  margin-left: 0;
-}
-
-.shortcuts :deep(.el-button.is-primary) {
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.28);
-}
-
-.empty-text {
-  padding: 24px 0;
-  color: var(--text-3);
-}
-
-@media (max-width: 768px) {
-  .panel {
-    padding: 14px;
+/* ==================== 响应式 ==================== */
+/* 窄屏：指标从右侧移到图表下方（仍是同一张卡，横排三列） */
+@media (max-width: 1280px) {
+  .overview {
+    grid-template-columns: minmax(0, 1fr);
+    row-gap: 18px;
   }
 
-  .stat-grid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .overview-metrics {
+    padding: 18px 0 0;
+    border-top: 1px dashed var(--admin-line-soft);
+    border-left: 0;
   }
 
-  .stat-value {
-    font-size: 24px;
+  .metrics {
+    flex-direction: row;
+  }
+
+  .metric-row {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+    padding: 0 18px;
+    border-right: 1px solid var(--admin-line-soft);
+    border-bottom: 0;
+  }
+
+  .metric-row:first-child {
+    padding-left: 0;
+  }
+
+  .metric-row:last-child {
+    border-right: 0;
+  }
+
+  .metric-right {
+    align-items: flex-start;
+  }
+}
+
+@media (max-width: 1024px) {
+  .bottom-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 }
 </style>

@@ -86,11 +86,26 @@ export const adminApi = {
   articleCreate: (data: ArticleForm) => request<Article>({ url: '/admin/articles', method: 'post', data }),
   articleUpdate: (id: number, data: ArticleForm) => request<Article>({ url: `/admin/articles/${id}`, method: 'put', data }),
   articleDelete: (id: number) => request<void>({ url: `/admin/articles/${id}`, method: 'delete' }),
+  /** 回收站 */
+  articleTrash: (params: { page: number; size: number }) =>
+    request<PageResult<Article>>({ url: '/admin/articles/trash', method: 'get', params }),
+  articleRestore: (id: number) => request<void>({ url: `/admin/articles/${id}/restore`, method: 'put' }),
+  articlePurge: (id: number) => request<void>({ url: `/admin/articles/${id}/purge`, method: 'delete' }),
   articleStatus: (id: number, status: 'DRAFT' | 'PUBLISHED') =>
     request<Article>({ url: `/admin/articles/${id}/status`, method: 'put', params: { status } }),
   /** 取消定时发布：回到草稿并清空定时时间 */
   articleCancelSchedule: (id: number) =>
     request<Article>({ url: `/admin/articles/${id}/cancel-schedule`, method: 'put' }),
+
+  /** 前端错误上报的查看与清空 */
+  clientErrors: (limit = 20) =>
+    request<Array<{ id: number; message: string; url?: string | null; createdAt: string }>>({
+      url: '/admin/client-errors',
+      method: 'get',
+      params: { limit }
+    }),
+  clientErrorCount: () => request<number>({ url: '/admin/client-errors/count', method: 'get' }),
+  clearClientErrors: () => request<number>({ url: '/admin/client-errors', method: 'delete' }),
 
   categoryList: () => request<Category[]>({ url: '/admin/categories', method: 'get' }),
   categoryCreate: (data: CategoryForm) => request<Category>({ url: '/admin/categories', method: 'post', data }),

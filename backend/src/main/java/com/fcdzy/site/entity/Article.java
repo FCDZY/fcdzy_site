@@ -15,6 +15,7 @@ import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.PreUpdate;
 import jakarta.persistence.Table;
+import org.hibernate.annotations.SQLRestriction;
 import java.time.LocalDateTime;
 import java.util.LinkedHashSet;
 import java.util.Set;
@@ -24,6 +25,7 @@ import java.util.Set;
  */
 @Entity
 @Table(name = "article")
+@SQLRestriction("deleted_at is null")
 public class Article {
 
     public enum Status {
@@ -86,6 +88,20 @@ public class Article {
     @Column(name = "schedule_publish_time")
     private LocalDateTime schedulePublishTime;
 
+    @Column(name = "deleted_at")
+    private LocalDateTime deletedAt;
+
+    public LocalDateTime getDeletedAt() {
+        return deletedAt;
+    }
+
+    public void setDeletedAt(LocalDateTime deletedAt) {
+        this.deletedAt = deletedAt;
+    }
+
+    public boolean isDeleted() {
+        return deletedAt != null;
+    }
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;
 

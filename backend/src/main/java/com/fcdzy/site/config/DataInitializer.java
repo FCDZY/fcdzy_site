@@ -42,6 +42,7 @@ public class DataInitializer implements ApplicationRunner {
     private final TopicService topicService;
     private final ArticleService articleService;
     private final ArticleRepository articleRepository;
+    private final com.fcdzy.site.security.LoginAttemptService loginAttemptService;
 
     public DataInitializer(AdminUserRepository adminUserRepository,
                            PasswordEncoder passwordEncoder,
@@ -51,7 +52,8 @@ public class DataInitializer implements ApplicationRunner {
                            TagService tagService,
                            TopicService topicService,
                            ArticleService articleService,
-                           ArticleRepository articleRepository) {
+                           ArticleRepository articleRepository,
+                           com.fcdzy.site.security.LoginAttemptService loginAttemptService) {
         this.adminUserRepository = adminUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.siteProperties = siteProperties;
@@ -61,6 +63,11 @@ public class DataInitializer implements ApplicationRunner {
         this.topicService = topicService;
         this.articleService = articleService;
         this.articleRepository = articleRepository;
+        this.loginAttemptService = loginAttemptService;
+        // 登录失败限流的阈值来自配置（site.admin.login-max-attempts / login-lock-minutes）
+        this.loginAttemptService.configure(
+                siteProperties.getAdmin().getLoginMaxAttempts(),
+                siteProperties.getAdmin().getLoginLockMinutes());
     }
 
     @Override

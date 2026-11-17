@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { SITE_SHORT_NAME } from '@/constants/site'
 import { getToken } from '@/api/http'
 
 const routes: RouteRecordRaw[] = [
@@ -92,10 +93,11 @@ router.beforeEach((to) => {
   return true
 })
 
+// 标签页标题统一用短名（FCDZY）：完整站名在标签页里会被浏览器截断。
+// 页面级的 useSeo 会在挂载后再覆盖一次，这里兜住后台等不走 useSeo 的页面。
 router.afterEach((to) => {
-  const base = '我的个人网站'
   const title = to.meta?.title as string | undefined
-  document.title = title && to.name !== 'home' ? `${title} · ${base}` : base
+  document.title = title && to.name !== 'home' ? `${title} · ${SITE_SHORT_NAME}` : SITE_SHORT_NAME
 })
 
 export default router

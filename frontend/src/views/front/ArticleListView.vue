@@ -5,7 +5,7 @@ import { publicApi } from '@/api'
 import type { Article } from '@/types'
 import { useSiteStore } from '@/stores/site'
 import { useSeo } from '@/composables/useSeo'
-import ArticleCard from '@/components/ArticleCard.vue'
+import ArticleRow from '@/components/ArticleRow.vue'
 import AppPagination from '@/components/AppPagination.vue'
 
 const props = defineProps<{
@@ -24,6 +24,7 @@ const articles = ref<Article[]>([])
 const total = ref(0)
 const loading = ref(false)
 const keyword = ref('')
+const searchInput = ref<HTMLInputElement | null>(null)
 
 const currentPage = computed(() => {
   const raw = Number(route.query.page)
@@ -38,6 +39,9 @@ const pageTitle = computed(() => {
   if (props.tagSlug) return `标签：${activeTag.value?.name || props.tagSlug}`
   return '全部文章'
 })
+
+/** 当前搜索词（用于显示「搜索：xxx」并可一键清空） */
+const activeKeyword = computed(() => (typeof route.query.keyword === 'string' ? route.query.keyword : ''))
 
 function scrollToList() {
   const el = listRef.value
@@ -54,7 +58,7 @@ async function load() {
       size: PAGE_SIZE,
       categoryId: activeCategory.value?.id ?? null,
       tagId: activeTag.value?.id ?? null,
-      keyword: typeof route.query.keyword === 'string' && route.query.keyword ? route.query.keyword : null
+      keyword: activeKeyword.value || null
     })
     articles.value = result.list
     total.value = result.total
@@ -81,6 +85,11 @@ function search() {
   }
   delete query.page
   router.push({ query })
+}
+
+function clearKeyword() {
+  keyword.value = ''
+  search()
 }
 
 function chipTo(to: string) {
@@ -116,66 +125,71 @@ watch(
 
 <template>
   <div class="page list-page">
-    <div class="container">
-      <header class="head">
-        <h1 class="page-title">{{ pageTitle }}</h1>
-        <p class="page-subtitle">共 {{ total }} 篇文章</p>
+    <div class="list-wrap">
+      <!-- 页头：标题 + 篇数（编辑式，无卡片） -->
+      <header class="list-head">
+        <h1 class="list-title">{{ pageTitle }}</h1>
+        <span class="list-count">{{ total }} 篇</span>
       </header>
 
-      <div class="card search-bar">
-        <el-input
+      <!-- 搜索：极简下划线，不用大白框 -->
+      <div class="search-line">
+        <input
+          ref="searchInput"
           v-model="keyword"
-          placeholder="搜索文章标题或内容"
-          clearable
+          class="search-input"
+          type="search"
+          placeholder="搜索标题或内容，回车确认"
           @keyup.enter="search"
-          @clear="search"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
-        <el-button type="primary" @click="search">搜索</el-button>
+        />
+        <button class="search-btn" type="button" @click="search">搜索</button>
+        <button v-if="activeKeyword" class="search-clear" type="button" @click="clearKeyword">清空</button>
       </div>
 
-      <div class="chips">
-        <button type="button" class="chip" :class="{ active: !props.categorySlug && !props.tagSlug }" @click="chipTo('/articles')">
+      <!-- 分类导航：纯文字 + 底部黑线表示选中 -->
+      <nav class="filter-nav" aria-label="分类">
+        <button
+          type="button"
+          class="filter-link"
+          :class="{ 'is-active': !props.categorySlug && !props.tagSlug }"
+          @click="chipTo('/articles')"
+        >
           全部
         </button>
+        <span class="filter-sep" aria-hidden="true">|</span>
         <button
           v-for="item in site.categories"
           :key="`c-${item.id}`"
           type="button"
-          class="chip"
-          :class="{ active: props.categorySlug === item.slug }"
+          class="filter-link"
+          :class="{ 'is-active': props.categorySlug === item.slug }"
           @click="chipTo(`/category/${item.slug}`)"
         >
           {{ item.name }}
         </button>
-      </div>
+      </nav>
 
-      <div class="chips">
+      <!-- 标签导航：同样纯文字 -->
+      <nav v-if="site.tags.length" class="filter-nav filter-nav--tags" aria-label="标签">
         <button
           v-for="item in site.tags"
           :key="`t-${item.id}`"
           type="button"
-          class="chip tag-chip"
-          :class="{ active: props.tagSlug === item.slug }"
+          class="filter-link filter-link--tag"
+          :class="{ 'is-active': props.tagSlug === item.slug }"
           @click="chipTo(`/tag/${item.slug}`)"
         >
-          # {{ item.name }}
+          #{{ item.name }}
         </button>
-        <span v-if="!site.tags.length" class="chips-empty">暂无标签</span>
-      </div>
+      </nav>
 
       <div ref="listRef" class="list-anchor">
-        <el-skeleton v-if="loading" :rows="6" animated class="skeleton card" />
+        <el-skeleton v-if="loading" :rows="6" animated />
 
         <template v-else>
-          <ArticleCard v-for="item in articles" :key="item.id" :article="item" />
+          <ArticleRow v-for="item in articles" :key="item.id" :article="item" :thumb-width="120" />
 
-          <div v-if="!articles.length" class="card empty">
-            <p>没有找到符合条件的文章</p>
-          </div>
+          <p v-if="!articles.length" class="list-empty">没有找到符合条件的文章</p>
         </template>
       </div>
 
@@ -186,89 +200,179 @@ watch(
 
 <style scoped>
 .list-page {
-  padding-top: 22px;
+  padding: 34px 0 72px;
 }
 
-.head {
-  margin-bottom: 16px;
+.list-wrap {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 0 24px;
 }
 
-.search-bar {
+/* ---- 页头 ---- */
+.list-head {
   display: flex;
-  gap: 10px;
-  padding: 14px;
-  margin-bottom: 14px;
+  align-items: baseline;
+  gap: 12px;
+  padding-bottom: 14px;
+  border-bottom: 2px solid var(--row-title);
 }
 
-.search-bar :deep(.el-input) {
+.list-title {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  color: var(--row-title);
+}
+
+.list-count {
+  font-size: 11.5px;
+  letter-spacing: 1px;
+  color: var(--meta-faint);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ---- 搜索：只有一条下划线 ---- */
+.search-line {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 18px 0 10px;
+  border-bottom: 1px solid var(--row-line);
+}
+
+.search-input {
   flex: 1;
+  min-width: 0;
+  padding: 4px 2px;
+  font-size: 14px;
+  color: var(--row-title);
+  background: transparent;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  outline: none;
+  transition: border-color 0.18s ease;
 }
 
-.chips {
+.search-input::placeholder {
+  color: var(--meta-faint);
+  letter-spacing: 0.5px;
+}
+
+.search-input:focus {
+  border-bottom-color: var(--row-title);
+}
+
+.search-btn,
+.search-clear {
+  padding: 2px 0;
+  font-size: 12.5px;
+  letter-spacing: 1px;
+  color: var(--meta-faint);
+  cursor: pointer;
+  background: none;
+  border: 0;
+  border-bottom: 1px solid transparent;
+  transition: color 0.18s ease, border-color 0.18s ease;
+}
+
+.search-btn:hover,
+.search-clear:hover {
+  color: var(--row-title);
+  border-bottom-color: var(--row-title);
+}
+
+/* ---- 分类 / 标签导航：纯文字 ---- */
+.filter-nav {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  gap: 6px 14px;
+  align-items: center;
+  padding: 14px 0 0;
 }
 
-.chip {
-  padding: 5px 14px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
-  background: var(--card);
-  color: var(--text-2);
-  font-size: 13.5px;
+.filter-nav--tags {
+  padding-top: 10px;
+}
+
+.filter-link {
+  position: relative;
+  padding: 2px 0;
+  font-size: 13px;
+  color: var(--meta-faint);
   cursor: pointer;
-  transition: all 0.16s ease;
+  background: none;
+  border: 0;
+  transition: color 0.18s ease;
 }
 
-.chip:hover {
-  color: var(--brand-dark);
-  border-color: var(--chip-border-hover);
-  background: var(--brand-soft-2);
+.filter-link:hover {
+  color: var(--row-title);
 }
 
-.chip.active {
-  background: var(--brand);
-  border-color: var(--brand);
-  color: #fff;
+/* 选中：文字加深 + 底部一条黑线（不用加粗，避免宽度跳动） */
+.filter-link.is-active {
+  color: var(--row-title);
 }
 
-.tag-chip {
-  font-size: 13px;
+.filter-link.is-active::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -2px;
+  height: 1px;
+  background: var(--row-title);
 }
 
-.chips-empty {
-  font-size: 13px;
-  color: var(--text-3);
+.filter-link--tag {
+  font-size: 12.5px;
+  letter-spacing: 0.4px;
 }
 
+.filter-sep {
+  color: var(--row-line);
+}
+
+/* ---- 列表 ---- */
 .list-anchor {
-  margin-top: 14px;
-  scroll-margin-top: calc(var(--header-height) + 16px);
+  margin-top: 6px;
 }
 
-.skeleton {
-  padding: 20px;
+.list-empty {
+  padding: 48px 0;
+  font-size: 13.5px;
+  color: var(--meta-faint);
+  text-align: center;
 }
 
-@media (max-width: 768px) {
+@media (max-width: 720px) {
   .list-page {
-    padding-top: 16px;
+    padding: 22px 0 56px;
   }
 
-  .search-bar {
-    padding: 12px;
-    flex-wrap: wrap;
+  .list-wrap {
+    padding: 0 16px;
   }
 
-  .search-bar :deep(.el-button) {
-    width: 100%;
+  .list-title {
+    font-size: 20px;
   }
 
-  .chip {
-    padding: 4px 11px;
-    font-size: 12.5px;
+  .search-line {
+    padding-top: 14px;
+  }
+
+  .filter-nav {
+    gap: 6px 12px;
+    overflow-x: auto;
+    flex-wrap: nowrap;
+    padding-bottom: 4px;
+  }
+
+  .filter-link {
+    flex: none;
   }
 }
 </style>

@@ -25,6 +25,8 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -36,6 +38,11 @@ import org.springframework.util.StringUtils;
 public class CommentService {
 
     private static final int MAX_PAGE_SIZE = 50;
+
+    /** 从打开表单到提交的最短耗时；低于这个值基本可以确定是脚本直投 */
+    private static final long MIN_SUBMIT_MILLIS = 2000;
+
+    private static final Logger log = LoggerFactory.getLogger(CommentService.class);
 
     private final CommentRepository commentRepository;
     private final ArticleRepository articleRepository;
@@ -57,6 +64,17 @@ public class CommentService {
     @Transactional
     public CommentDto create(String slug, CommentCreateRequest request, String ip, String userAgent) {
         Article article = resolvePublishedArticle(slug);
+
+        // ① 蜜罐：真人看不到这个字段，填了就一定是脚本 → 静默丢弃（返回成功但什么都不做）
+        if (request.getHp() != null && !request.getHp().isBlank()) {
+            log.info("丢弃蜜罐评论 ip={} nickname={}", ip, request.getNickname());
+            return null;
+        }
+
+        // ② 提交过快：脚本通常打开就提交，真人打字远超 2 秒
+        if (request.getElapsedMs() != null && request.getElapsedMs() >= 0 && request.getElapsedMs() < MIN_SUBMIT_MILLIS) {
+            throw new BizException("提交过快，请稍后重试");
+        }
 
         long waitSeconds = rateLimiter.tryAcquire(ip);
         if (waitSeconds > 0) {

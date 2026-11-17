@@ -19,6 +19,10 @@ public class ScheduledPublishJob {
 
     private static final Logger log = LoggerFactory.getLogger(ScheduledPublishJob.class);
 
+    /** 回收站保留天数（超过就物理删除） */
+    @org.springframework.beans.factory.annotation.Value("${site.schedule.trash-retain-days:30}")
+    private int retainDays;
+
     private final ArticleService articleService;
 
     public ScheduledPublishJob(ArticleService articleService) {
@@ -35,6 +39,22 @@ public class ScheduledPublishJob {
     @EventListener(ApplicationReadyEvent.class)
     public void onStartup() {
         runOnce("启动补扫");
+    }
+
+    /**
+     * 回收站清理：每天跑一次，彻底删除超过保留天数（默认 30 天）的文章。
+     * 只做物理删除，不影响线上其他逻辑。
+     */
+    @Scheduled(fixedDelayString = "${site.schedule.trash-clean-ms:86400000}", initialDelayString = "300000")
+    public void cleanTrash() {
+        try {
+            int removed = articleService.purgeExpiredTrash(retainDays);
+            if (removed > 0) {
+                log.info("回收站清理：彻底删除 {} 篇超过 {} 天的文章", removed, retainDays);
+            }
+        } catch (Exception ex) {
+            log.warn("回收站清理执行失败：{}", ex.getMessage());
+        }
     }
 
     private void runOnce(String trigger) {

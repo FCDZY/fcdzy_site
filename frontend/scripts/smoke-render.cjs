@@ -91,7 +91,7 @@ function appLength(html) {
     ['首篇文章标题', html.includes(list.list[0].title)],
     ['文章卡片', html.includes('article-card')],
     ['分类入口', html.includes(categories[0].name)],
-    ['侧栏含热门文章', html.includes('热门文章')],
+    ['个人卡 + 导航', html.includes('profile-nav')],
     ['侧栏不再有专题模块', !html.includes('topic-list') && !html.includes('暂无专题')]
   ])
 

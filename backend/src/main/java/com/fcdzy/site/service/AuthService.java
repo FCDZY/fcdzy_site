@@ -8,6 +8,7 @@ import com.fcdzy.site.dto.ProfileUpdateResponse;
 import com.fcdzy.site.entity.AdminUser;
 import com.fcdzy.site.repository.AdminUserRepository;
 import com.fcdzy.site.security.JwtService;
+import com.fcdzy.site.security.LoginAttemptService;
 import java.time.LocalDateTime;
 import java.util.regex.Pattern;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -23,20 +24,33 @@ public class AuthService {
     private final AdminUserRepository adminUserRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtService jwtService;
+    private final LoginAttemptService loginAttemptService;
 
-    public AuthService(AdminUserRepository adminUserRepository, PasswordEncoder passwordEncoder, JwtService jwtService) {
+    public AuthService(AdminUserRepository adminUserRepository,
+                       PasswordEncoder passwordEncoder,
+                       JwtService jwtService,
+                       LoginAttemptService loginAttemptService) {
         this.adminUserRepository = adminUserRepository;
         this.passwordEncoder = passwordEncoder;
         this.jwtService = jwtService;
+        this.loginAttemptService = loginAttemptService;
     }
 
     @Transactional
-    public LoginResponse login(LoginRequest request) {
+    public LoginResponse login(LoginRequest request, String ip) {
+        // 先用 IP 挡爆破：锁定期间即使密码正确也直接拒绝
+        loginAttemptService.checkAllowed(ip);
+
         AdminUser user = adminUserRepository.findByUsername(request.username().trim())
-                .orElseThrow(() -> BizException.unauthorized("用户名或密码错误"));
+                .orElseThrow(() -> {
+                    loginAttemptService.onFailure(ip);
+                    return BizException.unauthorized("用户名或密码错误");
+                });
         if (!passwordEncoder.matches(request.password(), user.getPassword())) {
+            loginAttemptService.onFailure(ip);
             throw BizException.unauthorized("用户名或密码错误");
         }
+        loginAttemptService.onSuccess(ip);
         user.setLastLoginAt(LocalDateTime.now());
         adminUserRepository.save(user);
         String token = jwtService.generateToken(user.getId(), user.getUsername());

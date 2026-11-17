@@ -9,6 +9,11 @@ const site = useSiteStore()
 const route = useRoute()
 
 const year = new Date().getFullYear()
+/** 页脚年份：起始年等于今年时只显示一个年份（避免 "© 2026 - 2026"） */
+const copyrightRange = computed(() => {
+  const from = Number(site.config.startYear) || year
+  return from >= year ? String(year) : `${from} - ${year}`
+})
 
 /** 首页的导航栏放在 Hero 内部，其他页面使用吸顶白底导航 */
 const showHeader = computed(() => route.name !== 'home')
@@ -38,11 +43,14 @@ const showHeader = computed(() => route.name !== 'home')
             >{{ site.config.icp }}</a
           >
         </p>
-        <p class="copyright">© {{ site.config.startYear || year }} - {{ year }} {{ site.siteName }}</p>
+        <p class="copyright">© {{ copyrightRange }} {{ site.siteName }}</p>
       </div>
     </footer>
 
     <BackToTop />
+
+    <!-- 胶片颗粒层：纯装饰，不拦截任何点击（z-index 低于弹层，灯箱/对话框里保持干净） -->
+    <div class="grain-layer" aria-hidden="true" />
   </div>
 </template>
 

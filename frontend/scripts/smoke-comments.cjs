@@ -459,6 +459,39 @@ const PROBE = `(() => {
     const cancelled = await probe()
     check('取消回复后恢复常态', !cancelled.bannerText && cancelled.submitText === '发表评论', `banner="${cancelled.bannerText}" / ${cancelled.submitText}`)
 
+    // ===== 5.9 防垃圾：蜜罐字段 / 提交过快 =====
+    console.log('\n【需求 6】防垃圾评论：蜜罐字段与提交过快')
+    {
+      const before = (await apiCall('GET', `/public/articles/${ARTICLE_SLUG}/comments?pageNum=1&pageSize=10`)).data
+      const beforeTotal = before ? before.total : 0
+
+      // ① 填了蜜罐字段：返回成功但不应入库
+      const hpRes = await apiCall('POST', `/public/articles/${ARTICLE_SLUG}/comments`, {
+        body: { nickname: 'smoke-bot', content: '我是机器人' + MARK, hp: 'http://spam.example.com' }
+      })
+      check('蜜罐命中时仍返回成功（不让机器人察觉）', hpRes.code === 0, `code=${hpRes.code}`)
+
+      // ② 提交过快：应被拒绝
+      const fastRes = await apiCall('POST', `/public/articles/${ARTICLE_SLUG}/comments`, {
+        body: { nickname: 'smoke-fast', content: '提交太快' + MARK, elapsedMs: 200 }
+      })
+      check('提交过快会被拒绝', fastRes.code !== 0, `code=${fastRes.code} msg=${fastRes.message}`)
+
+      await sleep(400)
+      const after = (await apiCall('GET', `/public/articles/${ARTICLE_SLUG}/comments?pageNum=1&pageSize=10`)).data
+      check(
+        '蜜罐评论没有进入评论列表',
+        (after ? after.total : 0) === beforeTotal,
+        `${beforeTotal} → ${(after ? after.total : 0)}`
+      )
+
+      const adminList = await apiCall('GET', '/admin/comments?status=ALL&pageNum=1&pageSize=100', { token })
+      const leaked = (adminList.data?.list || []).filter(
+        (c) => String(c.nickname || '').includes('smoke-bot') || String(c.nickname || '').includes('smoke-fast')
+      )
+      check('后台也没有这两条（说明根本没入库）', leaked.length === 0, `泄漏 ${leaked.length} 条`)
+    }
+
     // ===== 6. 后台审核/删除 =====
     console.log('\n【需求 3】后台「评论管理」：查看、通过、删除')
     await goto(`${BASE}/`, "!!document.querySelector('#app')")

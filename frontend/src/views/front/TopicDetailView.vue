@@ -4,6 +4,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { publicApi } from '@/api'
 import type { TopicDetail } from '@/types'
 import { useSiteStore } from '@/stores/site'
+import { IMAGE_PRESETS, optimizeImage } from '@/utils/image'
 import { useSeo } from '@/composables/useSeo'
 import { formatDate, formatNumber } from '@/utils/format'
 
@@ -77,7 +78,7 @@ watch(
         <header class="card topic-head">
           <img
             v-if="detail.topic.coverImage"
-            :src="detail.topic.coverImage"
+            :src="optimizeImage(detail.topic.coverImage, IMAGE_PRESETS.cover)"
             :alt="detail.topic.name"
             class="cover"
           />
