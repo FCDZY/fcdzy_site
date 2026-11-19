@@ -1,6 +1,6 @@
 /**
  * 首页文章列表分页专项检查：
- * 默认每页 10 条、总条数展示、上一页/下一页边界禁用、切换页码重新请求、深浅主题适配。
+ * 默认每页 6 条、总条数展示、上一页/下一页边界禁用、切换页码重新请求、深浅主题适配。
  *
  * 为了能真实测到第 2 页，脚本会临时创建若干测试文章，并在结束时（含异常）全部删除。
  * 用法：node scripts/smoke-pagination.cjs
@@ -17,7 +17,7 @@ const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const API = process.env.SMOKE_API || 'http://127.0.0.1:8080'
 const DEBUG_PORT = 9779
 const VIEW = { width: 1440, height: 900 }
-const PAGE_SIZE = 10
+const PAGE_SIZE = 6
 const TEMP_COUNT = 8
 
 const chromeCandidates = [
@@ -266,7 +266,7 @@ async function deleteTempArticles(token) {
 
     const p1 = await probe()
     console.log(`【后端】GET /api/public/articles?pageNum=1&pageSize=${PAGE_SIZE}`)
-    check('首页默认每页 10 条（第 1 页满页）', p1.cardCount === PAGE_SIZE, `${p1.cardCount} 张卡片`)
+    check('首页默认每页 6 条（第 1 页满页）', p1.cardCount === PAGE_SIZE, p1.cardCount + ' 张卡片')
     check('请求带 pageNum/pageSize 参数', articleRequests.some((u) => u.includes(`pageSize=${PAGE_SIZE}`)), articleRequests.at(-1)?.replace(BASE, ''))
 
     console.log('\n【前端 1】分页组件布局：总条数 + 上一页 + 页码 + 下一页')
@@ -289,13 +289,27 @@ async function deleteTempArticles(token) {
     const p2 = await probe()
     check('触发新的分页请求', articleRequests.some((u) => u.includes('pageNum=2')), articleRequests.at(-1)?.replace(BASE, ''))
     check('第 2 页页码高亮', p2.activePage === '2', p2.activePage)
-    const expectedP2 = after - PAGE_SIZE
+    const expectedP2 = Math.min(PAGE_SIZE, after - PAGE_SIZE)
     check('第 2 页条数正确', p2.cardCount === expectedP2, `${p2.cardCount} 张（应为 ${expectedP2}）`)
     check('两页内容不重复', p2.cardTitles.every((t) => !p1.cardTitles.includes(t)) || p2.cardCount !== PAGE_SIZE)
 
     console.log('\n【前端 4】最后一页：下一页禁用、上一页可用')
-    check('下一页禁用', p2.nextDisabled === true)
-    check('上一页可用', p2.prevDisabled === false)
+    const lastPageNo = await evaluate(`(() => {
+      const lis = Array.from(document.querySelectorAll('.el-pagination .el-pager li')).filter((x) => /^\d+$/.test(x.textContent.trim()))
+      return lis.length ? Number(lis[lis.length - 1].textContent.trim()) : 0
+    })()`)
+    if (lastPageNo > 1) {
+      await evaluate(`(() => {
+        const li = Array.from(document.querySelectorAll('.el-pagination .el-pager li')).find((x) => x.textContent.trim() === '${lastPageNo}')
+        if (li) li.click()
+      })()`)
+      await sleep(1600)
+      const lastP = await probe()
+      check('下一页禁用', lastP.nextDisabled === true, '最后一页=' + lastPageNo)
+      check('上一页可用', lastP.prevDisabled === false)
+    } else {
+      check('只有一页（跳过最后一页检查）', true)
+    }
 
     console.log('\n返回上一页')
     articleRequests = []

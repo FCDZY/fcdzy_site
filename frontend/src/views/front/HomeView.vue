@@ -7,7 +7,8 @@ import { useSiteStore } from '@/stores/site'
 import { useSeo } from '@/composables/useSeo'
 import { useTheme } from '@/composables/useTheme'
 import { IMAGE_PRESETS, optimizeImage } from '@/utils/image'
-import ArticleRow from '@/components/ArticleRow.vue'
+import TimelineList from '@/components/TimelineList.vue'
+import HeroParallax from '@/components/HeroParallax.vue'
 import AppPagination from '@/components/AppPagination.vue'
 import SiteHeader from '@/components/SiteHeader.vue'
 
@@ -15,7 +16,7 @@ const site = useSiteStore()
 const router = useRouter()
 const { isDark } = useTheme()
 
-const PAGE_SIZE = 10
+const PAGE_SIZE = 6
 
 /** 个人卡里的搜索框（回车跳到全部文章页） */
 const profileKeyword = ref('')
@@ -26,6 +27,38 @@ function submitSearch() {
 }
 
 const listRef = ref<HTMLElement | null>(null)
+const heroRef = ref<HTMLElement | null>(null)
+
+/**
+ * Hero 鼠标视差 + 光斑（A + D 方案）
+ *  - 图片 scale(1.06) + 位移 ±12px；文字反向位移 30%
+ *  - 光斑 240px 白色柔光跟随指针
+ *  - 只用 CSS 变量驱动 transform，不触发 Vue 重渲染
+ */
+const PARALLAX_PX = 12
+
+function onHeroPointer(event: PointerEvent) {
+  const hero = heroRef.value
+  if (!hero) return
+  if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return
+  const rect = hero.getBoundingClientRect()
+  if (rect.width === 0 || rect.height === 0) return
+  const nx = (event.clientX - rect.left) / rect.width - 0.5
+  const ny = (event.clientY - rect.top) / rect.height - 0.5
+  hero.style.setProperty('--px', `${(nx * 2 * PARALLAX_PX).toFixed(2)}px`)
+  hero.style.setProperty('--py', `${(ny * 2 * PARALLAX_PX).toFixed(2)}px`)
+  hero.style.setProperty('--spot-x', `${event.clientX - rect.left}px`)
+  hero.style.setProperty('--spot-y', `${event.clientY - rect.top}px`)
+  hero.style.setProperty('--spot-o', '1')
+}
+
+function onHeroLeave() {
+  const hero = heroRef.value
+  if (!hero) return
+  hero.style.setProperty('--px', '0px')
+  hero.style.setProperty('--py', '0px')
+  hero.style.setProperty('--spot-o', '0')
+}
 const articles = ref<Article[]>([])
 const total = ref(0)
 const page = ref(1)
@@ -68,10 +101,10 @@ async function loadArticles() {
 }
 
 function scrollToList() {
-  const el = listRef.value
-  if (el && typeof el.scrollIntoView === 'function') {
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
-  }
+  /* 正好滚到 Hero 底边：背景图只留在首屏，内容区顶部是 76px 的留白 */
+  const hero = document.querySelector('.hero') as HTMLElement | null
+  if (!hero) return
+  window.scrollTo({ top: hero.offsetHeight, behavior: 'smooth' })
 }
 
 
@@ -101,12 +134,13 @@ onMounted(() => {
 
 <template>
   <div class="home">
-    <!-- ===== Hero：整幅背景图 + 底部渐隐到页面底色 ===== -->
-    <section class="hero">
-      <img v-if="heroImage" class="hero-bg" :src="heroImage" alt="" fetchpriority="high" />
+    <!-- ===== Hero：整幅背景图（鼠标视差 + 光斑） ===== -->
+    <section ref="heroRef" class="hero" @pointermove="onHeroPointer" @pointerleave="onHeroLeave">
+      <!-- 背景：2.5D 三层视差（移动端回落到后台配置的图片） -->
+      <HeroParallax :fallback-src="heroImage" />
       <div class="hero-overlay" aria-hidden="true" />
+      <div class="hero-spot" aria-hidden="true" />
 
-      <SiteHeader transparent />
 
       <div class="container hero-content">
         <p class="hero-brand">FCDZY</p>
@@ -114,10 +148,20 @@ onMounted(() => {
         <p v-if="bannerSubtitle" class="hero-subtitle">{{ bannerSubtitle }}</p>
       </div>
 
+      <!-- 下滑箭头：全屏 Hero 里唯一的「往下还有内容」提示 -->
+      <button class="hero-scroll" type="button" aria-label="下滑查看文章" @click="scrollToList">
+        <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="m6 6 6 6 6-6" />
+          <path d="m6 13 6 6 6-6" />
+        </svg>
+      </button>
+
     </section>
 
     <!-- ===== 主体：左侧个人卡 + 右侧紧凑文章流 ===== -->
     <div class="home-body">
+      <!-- 导航移到内容区顶部（首屏留给整幅图） -->
+      <SiteHeader />
       <div class="container home-grid">
         <aside class="profile card">
           <div class="profile-avatar">
@@ -213,7 +257,7 @@ onMounted(() => {
           </div>
 
           <template v-else>
-            <ArticleRow v-for="item in articles" :key="item.id" :article="item" />
+            <TimelineList :articles="articles" :thumb-width="104" compact />
           </template>
 
           <AppPagination :total="total" :page="page" :size="PAGE_SIZE" @change="changePage" />
@@ -231,7 +275,9 @@ onMounted(() => {
   position: relative;
   display: flex;
   align-items: center;
-  min-height: 420px;
+  /* 全屏 Hero：svh 让移动端地址栏收放时不跳动，老浏览器退回 vh */
+  min-height: 100vh;
+  min-height: 100svh;
   overflow: hidden;
   isolation: isolate;
 }
@@ -244,20 +290,26 @@ onMounted(() => {
   height: 100%;
   object-fit: cover;
   object-position: center 40%;
-  /* 底部淡出：图片自己渐隐，露出全局页面背景（不再靠叠一层底色，避免出现硬边） */
-  -webkit-mask-image: linear-gradient(180deg, #000 58%, rgba(0, 0, 0, 0.75) 76%, transparent 100%);
-  mask-image: linear-gradient(180deg, #000 58%, rgba(0, 0, 0, 0.75) 76%, transparent 100%);
+  /* 不再做底部渐隐：图片直接铺到 Hero 底边（用户要求去掉那层朦胧感） */
+  /* 鼠标视差：放大 6% 留位移余量，只动 transform（GPU 合成） */
+  transform: scale(1.06) translate3d(var(--px, 0px), var(--py, 0px), 0);
+  transition: transform 0.25s ease-out;
+  will-change: transform;
 }
 
 .hero-overlay {
   position: absolute;
   inset: 0;
   z-index: 1;
-  background: linear-gradient(180deg, rgba(12, 10, 14, 0.42) 0%, rgba(12, 10, 14, 0.16) 36%, rgba(12, 10, 14, 0.04) 62%);
+  /* 只在最顶部压一点点暗，保证导航白字可读；图片本身的颜色不做任何处理 */
+  background: linear-gradient(180deg, rgba(10, 14, 20, 0.34) 0%, rgba(10, 14, 20, 0.1) 14%, transparent 30%);
 }
 
 .hero-content {
   position: relative;
+  /* 文字与图片反向移动 30%，产生层次差 */
+  transform: translate3d(calc(var(--px, 0px) * -0.3), calc(var(--py, 0px) * -0.3), 0);
+  transition: transform 0.25s ease-out;
   z-index: 2;
   display: flex;
   flex-direction: column;
@@ -279,6 +331,8 @@ onMounted(() => {
 }
 
 .hero-title {
+  /* 压暗层去掉后，靠文字自身的投影保证在亮背景上可读 */
+  text-shadow: 0 2px 18px rgba(4, 10, 18, 0.55), 0 1px 3px rgba(4, 10, 18, 0.45);
   margin: 0;
   font-size: clamp(30px, 4.4vw, 46px);
   font-weight: 800;
@@ -289,6 +343,7 @@ onMounted(() => {
 }
 
 .hero-subtitle {
+  text-shadow: 0 1px 10px rgba(4, 10, 18, 0.6);
   display: flex;
   gap: 10px;
   align-items: center;
@@ -318,16 +373,28 @@ onMounted(() => {
 
 .home-grid {
   display: grid;
-  grid-template-columns: 280px minmax(0, 1fr);
+  /* 文章在左、个人卡在右（用户要求把卡片挪到右手边） */
+  grid-template-columns: minmax(0, 1fr) 280px;
   gap: 22px;
   align-items: start;
-  /* 不再用负边距让卡片探进 Hero：那会让卡片顶边在图上"突起"一截 */
-  margin-top: 26px;
+  /* 导航自占 62px，这里再留 44px：标题与导航之间约 44px，不挤也不空 */
+  margin-top: 44px;
+  /* 比全站 1080px 更宽：让时间轴与文章整体左移，日期贴近左侧留白 */
+  max-width: 1240px;
+}
+
+.stream {
+  grid-column: 1;
+  grid-row: 1;
 }
 
 /* ---- 左侧个人卡 ---- */
 .profile {
   position: sticky;
+  /* 右侧列，并与左侧第一张文章卡片顶部对齐（标题区高 33px + 间距） */
+  grid-column: 2;
+  grid-row: 1;
+  margin-top: 62px;
   top: calc(var(--header-height, 62px) + 16px);
   padding: 18px 16px 14px;
   text-align: center;
@@ -528,6 +595,9 @@ onMounted(() => {
 
   .profile {
     position: static;
+    grid-column: 1;
+    grid-row: 2;
+    margin-top: 0;
   }
 
 }
@@ -575,5 +645,75 @@ onMounted(() => {
 
 .profile-search-btn:hover {
   color: var(--row-title);
+}
+
+/* ---- Hero 底部下滑箭头 ---- */
+.hero-scroll {
+  position: absolute;
+  bottom: 22px;
+  left: 50%;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  /* 箭头压在整幅照片上，明暗不定：白箭头 + 半透明深底 + 轻模糊，亮暗处都看得见 */
+  color: #fff;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.55));
+  transform: translateX(-50%);
+  transition: background 0.2s ease, border-color 0.2s ease;
+  animation: hero-bob 2.4s ease-in-out infinite;
+}
+
+.hero-scroll:hover {
+  filter: drop-shadow(0 2px 10px rgba(0, 0, 0, 0.75));
+}
+
+@keyframes hero-bob {
+  0%,
+  100% {
+    transform: translateX(-50%) translateY(0);
+  }
+  50% {
+    transform: translateX(-50%) translateY(7px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-scroll {
+    animation: none;
+  }
+}
+
+/* 光斑：跟随指针的柔光，模拟玻璃/油墨反光 */
+.hero-spot {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(
+    240px circle at var(--spot-x, 50%) var(--spot-y, 50%),
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.04) 40%,
+    transparent 70%
+  );
+  opacity: var(--spot-o, 0);
+  transition: opacity 0.3s ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .hero-bg,
+  .hero-content {
+    transform: none;
+    transition: none;
+  }
+
+  .hero-spot {
+    display: none;
+  }
 }
 </style>

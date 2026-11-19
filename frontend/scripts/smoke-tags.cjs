@@ -28,7 +28,8 @@ function check(label, ok, detail) {
 
 const PROBE = `(() => {
   const cs = (el) => (el ? getComputedStyle(el) : null)
-  const card = document.querySelector('.stream .article-card')
+  const rows = Array.from(document.querySelectorAll('.stream .article-card'))
+  const card = rows.find((r) => r.querySelector('.tag')) || rows[0] || null
   const tags = card ? Array.from(card.querySelectorAll('.tag')) : []
   const first = tags[0] || null
   const r = first ? first.getBoundingClientRect() : null
@@ -128,6 +129,11 @@ const PROBE = `(() => {
 
     console.log('\n【需求 3】点标签跳 /tag/*，不误跳文章详情')
     if (light.firstTag) {
+      // Hero 占满一屏，标签在视口外：先把它滚进视野再点
+      await evaluate(`(() => { const t = document.querySelector('.stream .article-card .tag'); if (t) t.scrollIntoView({ block: 'center' }) })()`)
+      await sleep(700)
+      const tagRect = JSON.parse(await evaluate(`(() => { const t = document.querySelector('.stream .article-card .tag'); const b = t.getBoundingClientRect(); return JSON.stringify({ x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }) })()`))
+      light.firstTag = tagRect
       await moveMouse(light.firstTag.x, light.firstTag.y)
       await click(light.firstTag.x, light.firstTag.y)
       const url = await evaluate('location.pathname')

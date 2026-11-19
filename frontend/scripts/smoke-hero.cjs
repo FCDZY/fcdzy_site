@@ -41,10 +41,13 @@ const PROBE = `(() => {
     hasHero: !!hero,
     heroTop: heroRect ? Math.round(heroRect.top + window.scrollY) : -1,
     heroHeight: heroRect ? Math.round(heroRect.height) : 0,
-    hasImage: !!img,
+  hasLayers: !!document.querySelector('.hero-layers'),
+    layerCount: document.querySelectorAll('.hero-layers .layer-stack .layer').length,
+    layersLoaded: Array.from(document.querySelectorAll('.hero-layers .layer-stack .layer')).every((el) => el.complete && el.naturalWidth > 0),
+  hasImage: !!img,
     imageSrc: img ? img.getAttribute('src') : '',
     imageLoaded: img ? img.complete && img.naturalWidth > 0 : false,
-    imageFit: img ? cs(img).objectFit : '',
+    imageFit: (() => { const l = document.querySelector('.hero-layers .layer-stack .layer'); return l ? cs(l).objectFit : '' })(),
     overlayBg: overlay ? cs(overlay).backgroundImage : '',
     imageMask: img ? (cs(img).maskImage || cs(img).webkitMaskImage || '') : '',
     fadeHeight: 0,
@@ -124,20 +127,41 @@ const PROBE = `(() => {
     console.log('【需求 1】Hero 结构与背景图')
     check('存在 Hero 区块', light.hasHero)
     check('Hero 位于页面顶部', light.heroTop === 0, `top=${light.heroTop}`)
-    check('Hero 高度在 380~520px', light.heroHeight >= 380 && light.heroHeight <= 520, `${light.heroHeight}px`)
-    check('Hero 挂了整幅背景图', light.hasImage && light.imageSrc.length > 20, (light.imageSrc || '').slice(0, 60))
-    check('背景图已加载', light.imageLoaded)
-    check('背景图铺满（object-fit: cover）', light.imageFit === 'cover', light.imageFit)
-    check('有顶部压暗遮罩', light.overlayBg.includes('rgba(') || light.overlayBg.includes('linear-gradient'), light.overlayBg.slice(0, 60))
+    check('Hero 占满一屏（100vh ±40px）', Math.abs(light.heroHeight - light.vh) <= 40, light.heroHeight + 'px / 视口 ' + light.vh + 'px')
+    check('Hero 使用分层背景（.hero-layers）', light.hasLayers === true)
+    check('四层素材都在（base/mid/right/near）', light.layerCount === 4, String(light.layerCount))
+    check('分层图已加载', light.layersLoaded === true)
+    check('分层使用 object-fit: cover', light.imageFit === 'cover', light.imageFit)
 
     console.log('\n【需求 2】底部渐隐（背景图 mask 淡出）')
-    check('背景图带渐隐 mask', /linear-gradient/.test(light.imageMask), light.imageMask.slice(0, 80))
-    check('mask 末端是透明（真正淡出，不是叠底色）', /transparent|rgba\(0, 0, 0, 0\)/.test(light.imageMask), light.imageMask.slice(0, 90))
+    check('背景图不再做底部渐隐（硬边到 Hero 底）', light.imageMask === 'none' || light.imageMask === '', light.imageMask)
+    check('Hero 底部与页面底色硬切（无朦胧带）', light.imageMask === 'none' || light.imageMask === '', light.imageMask)
 
     console.log('\n【需求 3】标题三层：站名 / 主标题 / 副标题')
     check('站名行存在', light.brandText.length > 0, light.brandText)
     check('主标题与后台配置一致', light.titleText.length > 0, light.titleText)
     check('副标题存在（本轮新加回）', light.subtitleText.length > 0, light.subtitleText)
+    const arrow = JSON.parse(await evaluate(`(() => {
+      const el = document.querySelector('.hero-scroll')
+      if (!el) return JSON.stringify({ found: false })
+      const r = el.getBoundingClientRect()
+      const cs = getComputedStyle(el)
+      return JSON.stringify({
+        found: true,
+        nearBottom: Math.abs(r.bottom - document.querySelector('.hero').getBoundingClientRect().bottom) <= 60,
+        centered: Math.abs((r.left + r.width / 2) - window.innerWidth / 2) <= 3,
+        color: cs.color,
+        hasSvg: !!el.querySelector('svg')
+      })
+    })()`))
+    check('Hero 底部有下滑箭头', arrow.found === true)
+    check('箭头位于 Hero 底部中间', arrow.nearBottom === true && arrow.centered === true)
+    check('箭头在照片上带深底（白字可读）', arrow.bg !== 'rgba(0, 0, 0, 0)' || arrow.color !== 'rgb(17, 17, 17)', arrow.color + ' / ' + arrow.bg)
+
+    await evaluate(`document.querySelector('.hero-scroll').click()`)
+    await sleep(900)
+    const afterClick = await evaluate('Math.round(window.scrollY)')
+    check('点击箭头会滚到文章列表', afterClick > 200, 'scrollY=' + afterClick)
     check('顺序为 站名 → 主标题 → 副标题', light.stackOrder.join(',') === 'hero-brand,hero-title,hero-subtitle', light.stackOrder.join(' / '))
     check('主标题为白色', light.titleColor === 'rgb(255, 255, 255)', light.titleColor)
     check('主标题字号 >= 28px', light.titleFontSize >= 28, `${light.titleFontSize}px`)
@@ -147,10 +171,10 @@ const PROBE = `(() => {
     check('旧的描述/按钮结构已移除', light.hasOldSubtitle === false)
 
     console.log('\n【需求 4】导航叠在 Hero 上且为白字')
-    check('导航在 Hero 内部', light.headerInsideHero)
-    check('导航贴在 Hero 最上方', light.headerTop === 0, `偏移 ${light.headerTop}px`)
-    check('导航为绝对定位叠在图上', light.headerPosition === 'absolute', light.headerPosition)
-    check('未吸顶时导航文字为白色系', /^rgba?\(255, 255, 255/.test(light.navIdleColor), light.navIdleColor)
+    check('导航已移到内容区（不再叠在 Hero 上）', light.headerInsideHero === false, String(light.headerInsideHero))
+    check('内容区导航为 relative（随页面滚动）', light.headerPosition === 'relative', light.headerPosition)
+    check('内容区导航文字为深色（浅底）', /^rgb\(4[0-9]|^rgb\(5[0-9]|^rgb\(7[0-9]/.test(light.navIdleColor) || light.navIdleColor !== 'rgb(255, 255, 255)', light.navIdleColor)
+    check('导航不在 Hero 顶部（偏移 > 0）', light.headerTop > 0, '偏移 ' + light.headerTop + 'px')
 
     if (OUT) await shoot(`${OUT}-hero-light.png`)
 
@@ -158,9 +182,9 @@ const PROBE = `(() => {
     await evaluate(`localStorage.setItem('fcdzy_theme','dark'); location.reload()`)
     await sleep(4000)
     const dark = JSON.parse(await evaluate(PROBE))
-    check('深色下 Hero 仍正常渲染', dark.hasHero && dark.hasImage)
-    check('深色下换用了另一张背景图', dark.imageSrc !== light.imageSrc, dark.imageSrc ? '已切换' : '(无)')
+    check('深色下 Hero 仍正常渲染', dark.hasHero && dark.hasLayers)
     check('深色下副标题仍可见', dark.subtitleText.length > 0)
+    check('分层背景在深浅色下共用', dark.imageSrc === light.imageSrc, '共用同一套素材')
     if (OUT) await shoot(`${OUT}-hero-dark.png`)
 
     console.log('\n【需求 6】移动端')

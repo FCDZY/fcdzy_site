@@ -22,8 +22,10 @@ const props = withDefaults(
     article: Article
     /** 缩略图宽度：首页 168，列表页更紧凑 120 */
     thumbWidth?: number
+    /** 时间线模式下日期由左侧大数字承担，行内不再重复显示 */
+    hideDate?: boolean
   }>(),
-  { thumbWidth: 168 }
+  { thumbWidth: 168, hideDate: false }
 )
 
 const router = useRouter()
@@ -37,6 +39,18 @@ const readingMinutes = computed(() => Number(props.article.readingMinutes) || 0)
 const cardTags = computed(() => (props.article.tags || []).slice(0, 2))
 const cardTagColors = computed(() => buildTagColorVars(cardTags.value.map((tag) => tag.name)))
 const dateText = computed(() => formatDate(props.article.publishedAt || props.article.createdAt))
+
+/** 分类配色：技术类固定蓝；其它按名字稳定取一种颜色（不随刷新变化） */
+const OTHER_CAT_SLOTS = 5
+
+const catColor = computed(() => {
+  const name = props.article.category?.name || ''
+  if (!name) return ''
+  if (/技术|开发|编程|前端|后端/.test(name)) return 'var(--cat-tech)'
+  let hash = 0
+  for (let i = 0; i < name.length; i += 1) hash = (hash * 31 + name.charCodeAt(i)) >>> 0
+  return `var(--cat-${hash % OTHER_CAT_SLOTS})`
+})
 
 /** 缩略图槽位尺寸：宽按 prop，高按 16:10 略扁 */
 const mediaStyle = computed(() => ({
@@ -54,9 +68,11 @@ function open() {
     <div class="row-body">
       <div class="row-meta">
         <span v-if="article.topped" class="row-topped">置顶</span>
-        <span v-if="article.category" class="row-cat">{{ article.category.name }}</span>
-        <span class="row-dot" aria-hidden="true">·</span>
-        <span class="row-date">{{ dateText }}</span>
+        <span v-if="article.category" class="row-cat" :style="{ color: catColor }">{{ article.category.name }}</span>
+        <template v-if="!hideDate">
+          <span class="row-dot" aria-hidden="true">·</span>
+          <span class="row-date">{{ dateText }}</span>
+        </template>
         <template v-if="readingMinutes">
           <span class="row-dot" aria-hidden="true">·</span>
           <span class="row-time">{{ readingMinutes }} 分钟</span>
@@ -92,24 +108,28 @@ function open() {
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 20px;
   align-items: center;
-  padding: 16px 4px;
+  /* A 方案：每篇一张实色卡片，靠卡片本身分隔，不再用横线 */
+  padding: 18px 20px;
   cursor: pointer;
-  border-bottom: 1px solid var(--row-line);
-  transition: background-color 0.18s ease;
+  background: var(--card-surface);
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  transition: background-color 0.18s ease, border-color 0.18s ease;
 }
 
 .article-row:hover {
-  background: var(--row-hover);
+  background: var(--card-surface-hover);
+  border-color: var(--card-line-hover);
 }
 
-/* 缩略图：4px 圆角 + 极淡描边 */
 .card-media {
   overflow: hidden;
+  /* 缩略图统一 8:5，图片 cover 裁切，右边缘就齐了 */
+  aspect-ratio: 8 / 5;
   background: var(--surface-muted, rgba(15, 23, 42, 0.05));
   border: 1px solid var(--image-line);
-  border-radius: 4px;
+  border-radius: 6px;
 }
-
 .card-media img {
   display: block;
   width: 100%;
@@ -138,7 +158,7 @@ function open() {
   align-items: center;
   overflow: hidden;
   margin-bottom: 6px;
-  font-size: 12.5px;
+  font-size: 11.5px;
   letter-spacing: 0.3px;
   color: var(--meta-faint);
   white-space: nowrap;
@@ -152,7 +172,9 @@ function open() {
   display: inline-flex;
   gap: 5px;
   align-items: center;
-  color: var(--brand);
+  /* 置顶用橙色，与蓝色分类区分 */
+  color: var(--cat-top);
+  font-weight: 500;
 }
 
 .row-topped::before {
@@ -175,23 +197,28 @@ function open() {
 .row-title {
   margin: 0;
   overflow: hidden;
-  font-size: 20px;
-  font-weight: 700;
-  line-height: 1.45;
-  color: var(--row-title);
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.5;
+  /* 立体感：上亮下暗的金属渐变 + 轻投影 */
+  background-image: linear-gradient(180deg, var(--title-grad-1) 0%, var(--title-grad-2) 45%, var(--title-grad-3) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  filter: drop-shadow(0 2px 3px var(--title-shadow));
   white-space: nowrap;
   text-overflow: ellipsis;
-  transition: color 0.18s ease;
+  transition: filter 0.18s ease, background-image 0.18s ease;
 }
 
 .article-row:hover .row-title {
-  color: var(--brand);
+  filter: drop-shadow(0 2px 3px var(--title-shadow)) brightness(1.18);
 }
 
 .row-summary {
   margin: 8px 0 0;
   overflow: hidden;
-  font-size: 15px;
+  font-size: 13.5px;
   line-height: 1.8;
   color: var(--row-summary);
   display: -webkit-box;
@@ -217,7 +244,7 @@ function open() {
 
 .tag {
   flex: none;
-  font-size: 12.5px;
+  font-size: 11.5px;
   letter-spacing: 0.3px;
   color: var(--tag-color, var(--meta-faint));
   white-space: nowrap;

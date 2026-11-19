@@ -5,7 +5,7 @@ import { publicApi } from '@/api'
 import type { Article } from '@/types'
 import { useSiteStore } from '@/stores/site'
 import { useSeo } from '@/composables/useSeo'
-import ArticleRow from '@/components/ArticleRow.vue'
+import TimelineList from '@/components/TimelineList.vue'
 import AppPagination from '@/components/AppPagination.vue'
 
 const props = defineProps<{
@@ -187,7 +187,7 @@ watch(
         <el-skeleton v-if="loading" :rows="6" animated />
 
         <template v-else>
-          <ArticleRow v-for="item in articles" :key="item.id" :article="item" :thumb-width="120" />
+          <TimelineList :articles="articles" :thumb-width="120" />
 
           <p v-if="!articles.length" class="list-empty">没有找到符合条件的文章</p>
         </template>

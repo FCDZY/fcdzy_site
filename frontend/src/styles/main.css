@@ -44,10 +44,17 @@
     radial-gradient(900px 520px at 12% 0%, rgba(233, 220, 232, 0.8) 0%, transparent 60%),
     radial-gradient(900px 620px at 96% 8%, rgba(214, 224, 242, 0.8) 0%, transparent 58%),
     linear-gradient(160deg, #e3e6ee 0%, #dfe2eb 55%, #e6e3ea 100%);
+  /*
+   * 深色底：#182431 为基色，叠两层极淡的光
+   *  - 顶部偏中位置一团冷白柔光（像屏幕后方的背光）
+   *  - 左下、右下各一点极弱蓝雾，避免大面积死板
+   * 透明度都压在 4%~7%，多了就变回"廉价光晕"。
+   */
   --page-bg-image-dark:
-    radial-gradient(900px 520px at 12% 0%, rgba(120, 40, 90, 0.4) 0%, transparent 62%),
-    radial-gradient(900px 620px at 96% 8%, rgba(30, 60, 120, 0.45) 0%, transparent 58%),
-    linear-gradient(160deg, #1a1024 0%, #101826 55%, #14101c 100%);
+    radial-gradient(1100px 620px at 50% -8%, rgba(150, 195, 255, 0.1) 0%, transparent 62%),
+    radial-gradient(900px 560px at 8% 88%, rgba(96, 140, 200, 0.07) 0%, transparent 58%),
+    radial-gradient(900px 560px at 96% 78%, rgba(120, 150, 220, 0.06) 0%, transparent 58%),
+    linear-gradient(160deg, #1a2735 0%, #182431 55%, #16212c 100%);
   /* 背景之上的薄纱已移除：页面全程完整展示背景图（不再有整体发白） */
   /* 卡片：毛玻璃（半透明白 + 6px 模糊，通透锐利 + 极淡白色描边），不做白色实底 */
   --surface-card: rgba(255, 255, 255, 0.45);
@@ -1020,9 +1027,10 @@ html.dark .home .card-media.is-empty {
 
 /* ==================== 首页（A 方案：渐变背景 + 纯白卡片） ==================== */
 
+/* 深色下卡片比底色 #1B2733 亮一档，保持同一色相（原来的 #1b1b24 偏紫，和板岩蓝打架） */
 html.dark .home .post,
 html.dark .home .profile {
-  background: #1b1b24;
+  background: #1f2c3a;
   border-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -1073,4 +1081,52 @@ html.dark .topic-card,
 html.dark .category-card {
   background: transparent;
   border-bottom-color: var(--row-line);
+}
+/* ==================== A 方案：每篇一张卡片 ==================== */
+:root {
+  --card-surface: #ffffff;
+  --card-surface-hover: #fcfdff;
+  --card-line: rgba(16, 24, 40, 0.08);
+  --card-line-hover: rgba(16, 24, 40, 0.18);
+}
+
+html.dark {
+  --card-surface: #1f2c3a;
+  --card-surface-hover: #253445;
+  --card-line: rgba(255, 255, 255, 0.07);
+  --card-line-hover: rgba(255, 255, 255, 0.16);
+}
+/* ==================== 标题立体感（渐变金属字） ==================== */
+:root {
+  --title-grad-1: #101010;
+  --title-grad-2: #2b3641;
+  --title-grad-3: #55636f;
+  --title-shadow: rgba(15, 23, 42, 0.14);
+}
+
+html.dark {
+  --title-grad-1: #ffffff;
+  --title-grad-2: #d3dfeb;
+  --title-grad-3: #93a6b9;
+  --title-shadow: rgba(0, 0, 0, 0.55);
+}
+/* ==================== 分类 / 置顶配色 ==================== */
+:root {
+  --cat-tech: #0369a1;   /* 技术类：蓝 */
+  --cat-top: #c2410c;    /* 置顶：橙 */
+  --cat-0: #6d28d9;
+  --cat-1: #15803d;
+  --cat-2: #be185d;
+  --cat-3: #0f766e;
+  --cat-4: #a16207;
+}
+
+html.dark {
+  --cat-tech: #7dd3fc;
+  --cat-top: #fbbf24;
+  --cat-0: #c4b5fd;
+  --cat-1: #86efac;
+  --cat-2: #f9a8d4;
+  --cat-3: #5eead4;
+  --cat-4: #fde68a;
 }
