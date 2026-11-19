@@ -111,7 +111,8 @@ const groups = computed<Group[]>(() => {
 
 .tl-group {
   display: grid;
-  grid-template-columns: 96px minmax(0, 1fr);
+  /* 日期列收窄到 78px：给卡片让出 18px，同时日期仍在同一位置 */
+  grid-template-columns: 78px minmax(0, 1fr);
 }
 
 .tl-group + .tl-group {
@@ -121,18 +122,26 @@ const groups = computed<Group[]>(() => {
 /* 左侧大日期：右对齐，紧贴竖线 */
 .tl-node {
   position: relative;
-  padding: 6px 22px 0 0;
+  padding: 6px 20px 0 0;
   text-align: right;
 }
 
 .tl-dot {
   position: absolute;
-  top: 14px;
-  right: -3.5px;
-  width: 7px;
-  height: 7px;
-  background: var(--row-title);
+  top: 13px;
+  right: -4px;
+  width: 8px;
+  height: 8px;
+  background: transparent;
+  /* 边框加粗到 2px：中间的孔只剩 4px，竖线穿过时几乎看不出"十字" */
+  border: 2px solid var(--row-title);
   border-radius: 50%;
+  transition: background-color 0.18s ease;
+}
+
+/* 鼠标落在当天任意一张卡片上 → 圆点变实心 */
+.tl-group:has(.article-row:hover) .tl-dot {
+  background: var(--row-title);
 }
 
 .tl-date {

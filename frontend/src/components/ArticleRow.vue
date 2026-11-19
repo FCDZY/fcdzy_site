@@ -52,10 +52,13 @@ const catColor = computed(() => {
   return `var(--cat-${hash % OTHER_CAT_SLOTS})`
 })
 
-/** 缩略图槽位尺寸：宽按 prop，高按 16:10 略扁 */
+/**
+ * 缩略图槽位：正方形。
+ * 高度跟随所在行（grid stretch），宽度由 aspect-ratio 反推 —— 卡片等高时图片就是和行一样高的正方形。
+ * thumbWidth 保留给移动端兜底（行高不够时按它取方形边长）。
+ */
 const mediaStyle = computed(() => ({
-  width: props.thumbWidth + 'px',
-  height: Math.round(props.thumbWidth * 0.64) + 'px'
+  minWidth: props.thumbWidth + 'px'
 }))
 
 function open() {
@@ -107,7 +110,8 @@ function open() {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: 20px;
-  align-items: center;
+  /* stretch：让图片槽位拿到与行内容相同的高度，正方形才有参照 */
+  align-items: stretch;
   /* A 方案：每篇一张实色卡片，靠卡片本身分隔，不再用横线 */
   padding: 18px 20px;
   cursor: pointer;
@@ -124,8 +128,10 @@ function open() {
 
 .card-media {
   overflow: hidden;
-  /* 缩略图统一 8:5，图片 cover 裁切，右边缘就齐了 */
-  aspect-ratio: 8 / 5;
+  /* 正方形：边长 = 卡片内容高度（174 - 18×2 = 138），图片 cover 裁切 */
+  width: 138px;
+  height: 138px;
+  aspect-ratio: 1 / 1;
   background: var(--surface-muted, rgba(15, 23, 42, 0.05));
   border: 1px solid var(--image-line);
   border-radius: 6px;
@@ -216,6 +222,8 @@ function open() {
 }
 
 .row-summary {
+  /* 固定占两行高度：只有一行摘要的卡片也要和两行的一样高 */
+  min-height: 3.6em;
   margin: 8px 0 0;
   overflow: hidden;
   font-size: 13.5px;
@@ -231,6 +239,8 @@ function open() {
   display: flex;
   gap: 10px;
   align-items: center;
+  /* 没有标签的文章也留出同样的高度，所有卡片高度才一致 */
+  min-height: 20px;
   min-width: 0;
   margin-top: 10px;
 }
@@ -261,8 +271,21 @@ function open() {
     padding: 14px 2px;
   }
 
+  /* 手机上按固定小方形，别让图片吃掉正文宽度 */
+  .card-media {
+    width: 76px;
+    height: 76px;
+    min-width: 0;
+  }
+
   .row-title {
+    /* 窄屏正文栏变窄，标题允许折两行，不再单行截断 */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+    -webkit-box-orient: vertical;
     font-size: 16px;
+    white-space: normal;
   }
 }
 </style>

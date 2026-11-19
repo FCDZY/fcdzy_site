@@ -24,7 +24,11 @@ const showHeader = computed(() => route.name !== 'home')
     <SiteHeader v-if="showHeader" />
 
     <main class="site-main">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <transition name="page" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </main>
 
     <footer class="site-footer">
@@ -63,6 +67,29 @@ const showHeader = computed(() => route.name !== 'home')
 
 .site-main {
   flex: 1;
+}
+
+/* 页面切换：淡入淡出 + 4px 微移，避免首页/文章页之间"硬切" */
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(6px);
+}
+
+.page-leave-to {
+  opacity: 0;
+  transform: translateY(-4px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .page-enter-active,
+  .page-leave-active {
+    transition: none;
+  }
 }
 
 /* 页脚：完全透明 —— 无底色、无边框、无阴影、无毛玻璃，背景图直接穿透；

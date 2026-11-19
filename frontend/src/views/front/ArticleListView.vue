@@ -187,7 +187,7 @@ watch(
         <el-skeleton v-if="loading" :rows="6" animated />
 
         <template v-else>
-          <TimelineList :articles="articles" :thumb-width="120" />
+          <TimelineList :articles="articles" :thumb-width="104" compact />
 
           <p v-if="!articles.length" class="list-empty">没有找到符合条件的文章</p>
         </template>
@@ -204,9 +204,11 @@ watch(
 }
 
 .list-wrap {
-  max-width: 900px;
-  margin: 0 auto;
-  padding: 0 24px;
+  /* 与首页完全同一套几何：内容左边缘 160、卡片 246–1162、竖线 224 */
+  max-width: 1034px;
+  margin-left: 144px;
+  margin-right: auto;
+  padding: 0 16px;
 }
 
 /* ---- 页头 ---- */
@@ -345,6 +347,15 @@ watch(
   font-size: 13.5px;
   color: var(--meta-faint);
   text-align: center;
+}
+
+@media (max-width: 960px) {
+  .list-wrap {
+    /* 窄屏取消首页那套不对称留白 */
+    max-width: none;
+    margin-left: 0;
+    padding: 0 18px;
+  }
 }
 
 @media (max-width: 720px) {

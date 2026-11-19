@@ -16,7 +16,7 @@ const site = useSiteStore()
 const router = useRouter()
 const { isDark } = useTheme()
 
-const PAGE_SIZE = 6
+const PAGE_SIZE = 8
 
 /** 个人卡里的搜索框（回车跳到全部文章页） */
 const profileKeyword = ref('')
@@ -60,6 +60,13 @@ function onHeroLeave() {
   hero.style.setProperty('--spot-o', '0')
 }
 const articles = ref<Article[]>([])
+
+/** 首页每段最多展示几条置顶，超出折叠 */
+const PINNED_LIMIT = 2
+const pinnedArticles = computed(() => articles.value.filter((a) => a.topped))
+const shownPinned = computed(() => pinnedArticles.value.slice(0, PINNED_LIMIT))
+const hiddenPinnedCount = computed(() => Math.max(0, pinnedArticles.value.length - PINNED_LIMIT))
+const normalArticles = computed(() => articles.value.filter((a) => !a.topped))
 const total = ref(0)
 const page = ref(1)
 const loading = ref(false)
@@ -240,11 +247,6 @@ onMounted(() => {
         </aside>
 
         <div ref="listRef" class="stream">
-          <div class="section-head">
-            <h2>最新文章</h2>
-            <router-link class="more" to="/articles">全部文章</router-link>
-          </div>
-
           <el-skeleton v-if="loading" :rows="5" animated class="skeleton" />
 
           <div v-else-if="error" class="card state-box">
@@ -257,7 +259,26 @@ onMounted(() => {
           </div>
 
           <template v-else>
-            <TimelineList :articles="articles" :thumb-width="104" compact />
+            <!-- 置顶段：最多 ${PINNED_LIMIT} 条，超出折叠 -->
+            <section v-if="shownPinned.length" class="feed-block">
+              <div class="block-head">
+                <h2>置顶</h2>
+                <span class="block-count">{{ pinnedArticles.length }} 篇</span>
+              </div>
+              <TimelineList :articles="shownPinned" :thumb-width="104" compact />
+              <router-link v-if="hiddenPinnedCount" class="more-pinned" to="/articles">
+                还有 {{ hiddenPinnedCount }} 篇置顶 →
+              </router-link>
+            </section>
+
+            <!-- 最新段：按发布时间倒序 -->
+            <section v-if="normalArticles.length" class="feed-block">
+              <div class="block-head">
+                <h2>最新</h2>
+                <router-link class="more" to="/articles">全部文章</router-link>
+              </div>
+              <TimelineList :articles="normalArticles" :thumb-width="104" compact />
+            </section>
           </template>
 
           <AppPagination :total="total" :page="page" :size="PAGE_SIZE" @change="changePage" />
@@ -374,13 +395,18 @@ onMounted(() => {
 .home-grid {
   display: grid;
   /* 文章在左、个人卡在右（用户要求把卡片挪到右手边） */
-  grid-template-columns: minmax(0, 1fr) 280px;
+  /* 个人卡列 260px：腾出 20px 给卡片，使卡片正好 +160px */
+  grid-template-columns: minmax(0, 1fr) 260px;
   gap: 22px;
   align-items: start;
   /* 导航自占 62px，这里再留 44px：标题与导航之间约 44px，不挤也不空 */
   margin-top: 44px;
   /* 比全站 1080px 更宽：让时间轴与文章整体左移，日期贴近左侧留白 */
-  max-width: 1240px;
+  /* 不对称留白：左边 60px（时间轴左移 40px），右边自动收回，卡片因此加宽 */
+  /* 左边距 144px：让时间轴竖线正好落在 224px（用户标注的位置），右边留 15px */
+  max-width: none;
+  width: calc(100% - 159px);
+  margin-left: 144px;
 }
 
 .stream {
@@ -538,34 +564,58 @@ onMounted(() => {
 }
 
 /* ---- 右侧文章流 ---- */
+/* 卡片右侧截断在 1148px（用户标注位置），与个人卡之间留出更大空隙 */
 .stream {
   display: flex;
   flex-direction: column;
   gap: 11px;
   min-width: 0;
+  /* 卡片在 1148px 处截断：补 205px 右侧留白，个人卡位置不动 */
+  padding-right: 205px;
+}
+/* 每段的小标题：置顶 / 最新 */
+.feed-block + .feed-block {
+  margin-top: 34px;
 }
 
-.section-head {
+.block-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
-  padding: 0 2px 2px;
+  padding: 0 2px 10px;
+  margin-bottom: 14px;
+  border-bottom: 1px solid var(--row-line, rgba(16, 24, 40, 0.14));
 }
 
-.section-head h2 {
+.block-head h2 {
   margin: 0;
-  font-size: 18.5px;
-  font-weight: 800;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.14em;
   color: var(--text-1);
 }
 
-.section-head .more {
-  font-size: 12.5px;
+.block-head .block-count,
+.block-head .more {
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
   color: var(--text-3);
   text-decoration: none;
 }
 
-.section-head .more:hover {
+.block-head .more:hover {
+  color: var(--brand-strong, #4f46e5);
+}
+
+.more-pinned {
+  display: inline-block;
+  margin-top: 10px;
+  font-size: 12px;
+  color: var(--text-3);
+  text-decoration: none;
+}
+
+.more-pinned:hover {
   color: var(--brand-strong, #4f46e5);
 }
 
@@ -591,6 +641,9 @@ onMounted(() => {
     grid-template-columns: minmax(0, 1fr);
     gap: 14px;
     margin-top: 20px;
+    /* 移动端取消桌面端的不对称留白 */
+    width: 100%;
+    margin-left: auto;
   }
 
   .profile {
@@ -600,6 +653,34 @@ onMounted(() => {
     margin-top: 0;
   }
 
+  /* 手机端取消卡片右侧的 205px 截断 */
+  .stream {
+    padding-right: 0;
+  }
+}
+
+/* 宽屏：个人卡左移贴住文章卡片（用户选 B），空隙 227px → 22px */
+@media (min-width: 961px) {
+  .profile {
+    /* 与 .stream 的 205px 右侧留白等量反向补偿 */
+    margin-left: -205px;
+    /* 负 margin 会把格子撑宽，这里锁死宽度 */
+    width: 260px;
+    justify-self: start;
+  }
+}
+
+/* 1560 以下的窗口没有富余宽度，别截断卡片：让卡片吃满，个人卡自然跟上 */
+@media (max-width: 1559px) {
+  .stream {
+    padding-right: 0;
+  }
+
+  .profile {
+    margin-left: 0;
+    width: auto;
+    justify-self: stretch;
+  }
 }
 
 

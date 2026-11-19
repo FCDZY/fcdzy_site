@@ -1,6 +1,6 @@
 /**
  * 首页文章列表分页专项检查：
- * 默认每页 6 条、总条数展示、上一页/下一页边界禁用、切换页码重新请求、深浅主题适配。
+ * 默认每页 8 条、总条数展示、上一页/下一页边界禁用、切换页码重新请求、深浅主题适配。
  *
  * 为了能真实测到第 2 页，脚本会临时创建若干测试文章，并在结束时（含异常）全部删除。
  * 用法：node scripts/smoke-pagination.cjs
@@ -17,7 +17,7 @@ const BASE = process.env.SMOKE_BASE || 'http://127.0.0.1:5173'
 const API = process.env.SMOKE_API || 'http://127.0.0.1:8080'
 const DEBUG_PORT = 9779
 const VIEW = { width: 1440, height: 900 }
-const PAGE_SIZE = 6
+const PAGE_SIZE = 8
 const TEMP_COUNT = 8
 
 const chromeCandidates = [
@@ -266,7 +266,7 @@ async function deleteTempArticles(token) {
 
     const p1 = await probe()
     console.log(`【后端】GET /api/public/articles?pageNum=1&pageSize=${PAGE_SIZE}`)
-    check('首页默认每页 6 条（第 1 页满页）', p1.cardCount === PAGE_SIZE, p1.cardCount + ' 张卡片')
+    check('首页默认每页 8 条（第 1 页满页）', p1.cardCount === PAGE_SIZE, p1.cardCount + ' 张卡片')
     check('请求带 pageNum/pageSize 参数', articleRequests.some((u) => u.includes(`pageSize=${PAGE_SIZE}`)), articleRequests.at(-1)?.replace(BASE, ''))
 
     console.log('\n【前端 1】分页组件布局：总条数 + 上一页 + 页码 + 下一页')

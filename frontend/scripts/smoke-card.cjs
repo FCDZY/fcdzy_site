@@ -29,7 +29,7 @@ function check(label, ok, detail) {
 
 const PROBE = `(() => {
   const cs = (el) => (el ? getComputedStyle(el) : null)
-  const rows = Array.from(document.querySelectorAll('.stream .article-card'))
+  const rows = Array.from(document.querySelectorAll('.stream .article-row'))
   const first = rows[0] || null
   const media = first ? first.querySelector('.card-media') : null
   const title = first ? first.querySelector('.row-title') : null
@@ -43,7 +43,8 @@ const PROBE = `(() => {
   return JSON.stringify({
     cardCount: rows.length,
     display: first ? cs(first).display : '',
-    mediaWidth: media ? Math.round(media.getBoundingClientRect().width) : 0,
+  mediaWidth: media ? Math.round(media.getBoundingClientRect().width) : 0,
+  mediaHeight: media ? Math.round(media.getBoundingClientRect().height) : 0,
     mediaOnRight: media && title ? media.getBoundingClientRect().left > title.getBoundingClientRect().left : false,
     cardHeight: r ? Math.round(r.height) : 0,
     bg: first ? cs(first).backgroundColor : '',
@@ -117,7 +118,7 @@ const PROBE = `(() => {
     console.log('【需求 1】列表结构：文字在左、缩略图固定 168px 在右')
     check('渲染出了文章行', before.cardCount > 0, `${before.cardCount} 行`)
     check('两列网格（文字 + 缩略图）', before.display === 'grid', before.display)
-    check('缩略图列约 104px（首页紧凑）', Math.abs(before.mediaWidth - 104) <= 8, before.mediaWidth + 'px')
+check('缩略图是 138px 正方形', Math.abs(before.mediaWidth - 138) <= 2 && Math.abs(before.mediaHeight - 138) <= 2, before.mediaWidth + 'x' + before.mediaHeight)
     check('缩略图始终在右（不再交替）', before.mediaOnRight === true)
     check('行高 120~240px', before.cardHeight >= 120 && before.cardHeight <= 240, `${before.cardHeight}px`)
     check('行是卡片：10px 圆角', before.radius === '10px', before.radius)
@@ -152,13 +153,13 @@ const PROBE = `(() => {
 
     console.log('\n【需求 5】hover：底色变淡 + 标题变色（不上浮）')
     // Hero 现在占满一屏，第一条在视口外：先滚到它，否则 hover/click 打不到
-    await evaluate(`document.querySelector('.stream .article-card').scrollIntoView({ block: 'center' })`)
+    await evaluate(`document.querySelector('.stream .article-row').scrollIntoView({ block: 'center' })`)
     await sleep(700)
     const rect = JSON.parse(
-      await evaluate(`(() => { const b = document.querySelector('.stream .article-card').getBoundingClientRect(); return JSON.stringify({ x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }) })()`)
+      await evaluate(`(() => { const b = document.querySelector('.stream .article-row').getBoundingClientRect(); return JSON.stringify({ x: Math.round(b.left + b.width / 2), y: Math.round(b.top + b.height / 2) }) })()`)
     )
     await send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: rect.x, y: rect.y, button: 'none', buttons: 0 })
-    await sleep(420)
+    await sleep(700)
     const hovered = JSON.parse(await evaluate(PROBE))
     check('hover 出现淡色底', hovered.bg !== before.bg, `${before.bg} → ${hovered.bg}`)
     check('hover 标题有反馈（滤镜变化）', hovered.titleFilter !== before.titleFilter, (before.titleFilter || '').slice(0, 36) + ' → ' + (hovered.titleFilter || '').slice(0, 36))
