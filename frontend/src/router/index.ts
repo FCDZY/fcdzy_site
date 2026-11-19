@@ -78,6 +78,8 @@ const router = createRouter({
   routes,
   scrollBehavior(to, from, savedPosition) {
     if (savedPosition) return savedPosition
+    // 同一页面只改 query（例如首页的分类过滤）：保持滚动位置，别把用户弹回顶部
+    if (to.path === from.path) return false
     return { top: 0 }
   }
 })

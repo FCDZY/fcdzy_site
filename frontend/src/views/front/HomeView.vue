@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { publicApi } from '@/api'
-import type { Article } from '@/types'
+import type { Article, Category } from '@/types'
 import { useSiteStore } from '@/stores/site'
 import { useSeo } from '@/composables/useSeo'
 import { useTheme } from '@/composables/useTheme'
@@ -14,6 +14,7 @@ import SiteHeader from '@/components/SiteHeader.vue'
 
 const site = useSiteStore()
 const router = useRouter()
+const route = useRoute()
 const { isDark } = useTheme()
 
 const PAGE_SIZE = 8
@@ -61,6 +62,51 @@ function onHeroLeave() {
 }
 const articles = ref<Article[]>([])
 
+/* ===== 分类下拉：首页内联过滤（不跳页，只换卡片） ===== */
+const categories = ref<Category[]>([])
+const activeCategory = ref<Category | null>(null)
+const menuOpen = ref(false)
+const catWrapRef = ref<HTMLElement | null>(null)
+/** 全部文章数（未过滤时就是 total，过滤后仍要显示它） */
+const totalAll = ref(0)
+
+function findCategory(slug: unknown) {
+  const key = typeof slug === 'string' ? slug : ''
+  return key ? categories.value.find((c) => c.slug === key) ?? null : null
+}
+
+/** 选中某个分类后：重置分页、重新拉数据、把 feed 顶部滚进视野 */
+async function applyCategory(cat: Category | null) {
+  activeCategory.value = cat
+  menuOpen.value = false
+  page.value = 1
+  await loadArticles()
+  if (cat) scrollToFeed()
+
+  const query = { ...route.query }
+  if (cat) query.category = cat.slug
+  else delete query.category
+  router.replace({ path: '/', query })
+}
+
+/** 把 feed 顶部对齐到导航下方，避免收起置顶时内容整体窜动 */
+function scrollToFeed() {
+  const el = listRef.value
+  if (!el) return
+  const top = el.getBoundingClientRect().top + window.scrollY - 96
+  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+}
+
+function onDocPointerDown(event: PointerEvent) {
+  if (!menuOpen.value) return
+  const wrap = catWrapRef.value
+  if (wrap && !wrap.contains(event.target as Node)) menuOpen.value = false
+}
+
+function onDocKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') menuOpen.value = false
+}
+
 /** 首页每段最多展示几条置顶，超出折叠 */
 const PINNED_LIMIT = 2
 const pinnedArticles = computed(() => articles.value.filter((a) => a.topped))
@@ -95,15 +141,32 @@ async function loadArticles() {
   error.value = ''
   try {
     // 分页参数使用 pageNum / pageSize，后端返回 records（=list）与 total
-    const result = await publicApi.articles({ pageNum: page.value, pageSize: PAGE_SIZE })
+    const result = await publicApi.articles({
+      pageNum: page.value,
+      pageSize: PAGE_SIZE,
+      ...(activeCategory.value ? { categoryId: activeCategory.value.id } : {})
+    })
     articles.value = result.records ?? result.list ?? []
     total.value = result.total ?? 0
+    if (!activeCategory.value) totalAll.value = total.value
   } catch {
     articles.value = []
     total.value = 0
     error.value = '文章加载失败，请稍后重试'
   } finally {
     loading.value = false
+  }
+}
+
+async function loadCategories() {
+  try {
+    categories.value = await publicApi.categories()
+    // 直接用 ?category= 打开时还没加载过「全部」，用分类计数兜底个人卡的文章总数
+    if (!totalAll.value) {
+      totalAll.value = categories.value.reduce((sum, cat) => sum + (cat.articleCount ?? 0), 0)
+    }
+  } catch {
+    categories.value = []
   }
 }
 
@@ -134,9 +197,31 @@ watch(
 )
 
 
-onMounted(() => {
+onMounted(async () => {
+  await loadCategories()
+  activeCategory.value = findCategory(route.query.category)
   loadArticles()
+  document.addEventListener('pointerdown', onDocPointerDown)
+  document.addEventListener('keydown', onDocKeydown)
 })
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', onDocPointerDown)
+  document.removeEventListener('keydown', onDocKeydown)
+})
+
+/** 浏览器前进/后退改变了 ?category= 时同步过滤状态 */
+watch(
+  () => route.query.category,
+  (slug) => {
+    if (route.path !== '/') return
+    const next = findCategory(slug)
+    if ((next?.id ?? null) === (activeCategory.value?.id ?? null)) return
+    activeCategory.value = next
+    page.value = 1
+    loadArticles()
+  }
+)
 </script>
 
 <template>
@@ -206,7 +291,7 @@ onMounted(() => {
 
           <div class="profile-stats">
             <div class="stat">
-              <b>{{ total }}</b>
+              <b>{{ totalAll || total }}</b>
               <span>文章</span>
             </div>
             <div class="stat">
@@ -259,8 +344,8 @@ onMounted(() => {
           </div>
 
           <template v-else>
-            <!-- 置顶段：最多 ${PINNED_LIMIT} 条，超出折叠 -->
-            <section v-if="shownPinned.length" class="feed-block">
+            <!-- 置顶段：选了分类就整段收起，下面的列表自然上移补位 -->
+            <section v-if="!activeCategory && shownPinned.length" class="feed-block">
               <div class="block-head">
                 <h2>置顶</h2>
                 <span class="block-count">{{ pinnedArticles.length }} 篇</span>
@@ -271,13 +356,59 @@ onMounted(() => {
               </router-link>
             </section>
 
-            <!-- 最新段：按发布时间倒序 -->
-            <section v-if="normalArticles.length" class="feed-block">
+            <!-- 列表段：默认「最新」，选中分类后变成该分类，工具条位置不动 -->
+            <section v-if="activeCategory || normalArticles.length" class="feed-block">
               <div class="block-head">
-                <h2>最新</h2>
-                <router-link class="more" to="/articles">全部文章</router-link>
+                <h2>{{ activeCategory ? activeCategory.name : '最新' }}</h2>
+
+                <div ref="catWrapRef" class="head-tools">
+                  <div class="cat-wrap">
+                    <button
+                      type="button"
+                      class="cat-btn"
+                      :class="{ 'is-open': menuOpen }"
+                      :aria-expanded="menuOpen"
+                      aria-haspopup="menu"
+                      @click="menuOpen = !menuOpen"
+                    >
+                      {{ activeCategory ? '切换分类' : '分类' }}
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+
+                    <div v-if="menuOpen" class="cat-menu" role="menu">
+                      <button
+                        type="button"
+                        class="cat-item"
+                        :class="{ 'is-active': !activeCategory }"
+                        role="menuitem"
+                        @click="applyCategory(null)"
+                      >
+                        <span>全部</span>
+                        <span class="cat-num">{{ totalAll }}</span>
+                      </button>
+                      <button
+                        v-for="cat in categories"
+                        :key="cat.id"
+                        type="button"
+                        class="cat-item"
+                        :class="{ 'is-active': activeCategory?.id === cat.id }"
+                        role="menuitem"
+                        @click="applyCategory(cat)"
+                      >
+                        <span>{{ cat.name }}</span>
+                        <span class="cat-num">{{ cat.articleCount ?? '' }}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <router-link v-if="!activeCategory" class="more" to="/articles">全部文章</router-link>
+                  <span v-else class="block-count">{{ total }} 篇</span>
+                </div>
               </div>
-              <TimelineList :articles="normalArticles" :thumb-width="104" compact />
+
+              <TimelineList :articles="activeCategory ? articles : normalArticles" :thumb-width="104" compact />
             </section>
           </template>
 
@@ -605,6 +736,91 @@ onMounted(() => {
 
 .block-head .more:hover {
   color: var(--brand-strong, #4f46e5);
+}
+
+/* ---- 分类下拉 ---- */
+.head-tools {
+  display: flex;
+  gap: 14px;
+  align-items: baseline;
+}
+
+.cat-wrap {
+  position: relative;
+}
+
+.cat-btn {
+  display: inline-flex;
+  gap: 4px;
+  align-items: center;
+  padding: 0;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  color: var(--text-3);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: color 0.16s ease;
+}
+
+.cat-btn:hover,
+.cat-btn.is-open {
+  color: var(--text-1);
+}
+
+.cat-btn svg {
+  transition: transform 0.16s ease;
+}
+
+.cat-btn.is-open svg {
+  transform: rotate(180deg);
+}
+
+.cat-menu {
+  position: absolute;
+  top: calc(100% + 10px);
+  right: 0;
+  z-index: 30;
+  min-width: 168px;
+  padding: 6px;
+  background: var(--card-surface);
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+  box-shadow: 0 14px 34px rgba(16, 24, 40, 0.12);
+}
+
+.cat-item {
+  display: flex;
+  gap: 16px;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  color: var(--text-2);
+  text-align: left;
+  background: none;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.14s ease, color 0.14s ease;
+}
+
+.cat-item:hover {
+  color: var(--text-1);
+  background: var(--row-hover, rgba(15, 23, 42, 0.05));
+}
+
+.cat-item.is-active {
+  font-weight: 600;
+  color: var(--text-1);
+}
+
+.cat-num {
+  font-size: 11px;
+  color: var(--meta-faint, var(--text-3));
+  font-variant-numeric: tabular-nums;
 }
 
 .more-pinned {
