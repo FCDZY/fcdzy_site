@@ -1,4 +1,5 @@
 import { createRouter, createWebHistory, type RouteRecordRaw } from 'vue-router'
+import { reloadOnceForStaleChunk } from '@/utils/errorReporter'
 import { SITE_SHORT_NAME } from '@/constants/site'
 import { getToken } from '@/api/http'
 
@@ -78,9 +79,22 @@ const router = createRouter({
   routes,
   scrollBehavior(to, from, savedPosition) {
     if (savedPosition) return savedPosition
-    // 同一页面只改 query（例如首页的分类过滤）：保持滚动位置，别把用户弹回顶部
-    if (to.path === from.path) return false
+    // 同一页面只改筛选 query：保持滚动位置，别把用户弹回顶部。
+    // 但页码变了（点导航「首页」从 ?page=2 回到 /）就老老实实回顶部。
+    if (to.path === from.path && to.query.page === from.query.page) return false
     return { top: 0 }
+  }
+})
+
+/* 记录「这次是浏览器的后退/前进」：首页靠它判断要不要恢复滚动位置 */
+window.addEventListener('popstate', () => {
+  /* 打同步标记：Vue 的过渡类名在下一帧才生成，只有挂到 <html> 上才来得及 */
+  document.documentElement.classList.add('nav-back')
+  window.setTimeout(() => document.documentElement.classList.remove('nav-back'), 600)
+  try {
+    sessionStorage.setItem('fcdzy_nav_back', '1')
+  } catch {
+    /* 隐私模式下不可用，忽略 */
   }
 })
 
@@ -100,6 +114,16 @@ router.beforeEach((to) => {
 router.afterEach((to) => {
   const title = to.meta?.title as string | undefined
   document.title = title && to.name !== 'home' ? `${title} · ${SITE_SHORT_NAME}` : SITE_SHORT_NAME
+})
+
+/* 懒加载的路由分包 404（发版后旧页面还在要已删除的文件）：
+   先整页重载一次拿新的 index.html，避免用户停在白屏 */
+router.onError((error: unknown) => {
+  const message = error instanceof Error ? error.message : String(error)
+  if (!/Failed to fetch dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(message)) {
+    return
+  }
+  reloadOnceForStaleChunk()
 })
 
 export default router

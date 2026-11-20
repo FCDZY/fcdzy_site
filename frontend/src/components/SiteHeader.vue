@@ -53,7 +53,6 @@ onBeforeUnmount(() => {
 
 const navs = [
   { label: '首页', to: '/' },
-  { label: '文章', to: '/articles' },
   { label: '分类', to: '/categories' },
   { label: '专题', to: '/topics' },
   { label: '关于', to: '/about' }

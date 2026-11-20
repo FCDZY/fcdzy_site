@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { onBeforeRouteLeave } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 import { publicApi } from '@/api'
-import type { Article, Category } from '@/types'
+import type { Article, Category, Topic } from '@/types'
 import { useSiteStore } from '@/stores/site'
 import { useSeo } from '@/composables/useSeo'
 import { useTheme } from '@/composables/useTheme'
@@ -19,12 +20,41 @@ const { isDark } = useTheme()
 
 const PAGE_SIZE = 8
 
-/** 个人卡里的搜索框（回车跳到全部文章页） */
+/** 个人卡里的搜索框：回车后在本页展示结果，不跳页 */
 const profileKeyword = ref('')
+/** 当前生效的搜索词（空 = 不在搜索态） */
+const activeKeyword = ref('')
 
-function submitSearch() {
+async function submitSearch() {
   const value = profileKeyword.value.trim()
-  router.push(value ? { path: '/articles', query: { keyword: value } } : '/articles')
+  if (!value) {
+    await clearSearch()
+    return
+  }
+  activeKeyword.value = value
+  profileKeyword.value = value
+  /* 搜索与分类/专题互斥：进入搜索态就退出它们 */
+  activeCategory.value = null
+  activeTopic.value = null
+  topicArticles.value = []
+  menuOpen.value = false
+  topicMenuOpen.value = false
+  page.value = 1
+  await loadArticles()
+  scrollToTop()
+  router.replace({ path: '/', query: { keyword: value } })
+}
+
+/** 退出搜索态，回到正常首页 */
+async function clearSearch() {
+  activeKeyword.value = ''
+  profileKeyword.value = ''
+  page.value = 1
+  await loadArticles()
+  const query = { ...route.query }
+  delete query.keyword
+  router.replace({ path: '/', query })
+  expandHeroKeepingFeed()
 }
 
 const listRef = ref<HTMLElement | null>(null)
@@ -66,9 +96,14 @@ const articles = ref<Article[]>([])
 const categories = ref<Category[]>([])
 const activeCategory = ref<Category | null>(null)
 const menuOpen = ref(false)
-const catWrapRef = ref<HTMLElement | null>(null)
 /** 全部文章数（未过滤时就是 total，过滤后仍要显示它） */
 const totalAll = ref(0)
+
+/* ===== 专题下拉：选中后置顶块的位置换成专题概述 ===== */
+const topics = ref<Topic[]>([])
+const activeTopic = ref<Topic | null>(null)
+const topicArticles = ref<Article[]>([])
+const topicMenuOpen = ref(false)
 
 function findCategory(slug: unknown) {
   const key = typeof slug === 'string' ? slug : ''
@@ -79,14 +114,100 @@ function findCategory(slug: unknown) {
 async function applyCategory(cat: Category | null) {
   activeCategory.value = cat
   menuOpen.value = false
+  /* 三个筛选条件互斥：选分类就退出搜索与专题 */
+  activeKeyword.value = ''
+  profileKeyword.value = ''
+  activeTopic.value = null
+  topicArticles.value = []
   page.value = 1
   await loadArticles()
-  if (cat) scrollToFeed()
+  if (cat) scrollToTop()
+  else expandHeroKeepingFeed()
 
   const query = { ...route.query }
   if (cat) query.category = cat.slug
   else delete query.category
+  delete query.keyword
+  delete query.topic
+  delete query.page
   router.replace({ path: '/', query })
+}
+
+/**
+ * 自定义缓动滚动：系统自带的 behavior:'smooth' 距离长时会拖到 2s 以上，
+ * 这里固定 620ms + easeInOutCubic，快慢可控。
+ */
+function smoothScrollTo(targetTop: number, duration = 620) {
+  const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  const start = window.scrollY
+  const delta = targetTop - start
+  if (reduce || Math.abs(delta) < 1) {
+    window.scrollTo(0, targetTop)
+    return
+  }
+  const t0 = performance.now()
+  const ease = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - (-2 * t + 2) ** 3 / 2)
+  const step = (now: number) => {
+    const p = Math.min(1, (now - t0) / duration)
+    window.scrollTo(0, start + delta * ease(p))
+    if (p < 1) requestAnimationFrame(step)
+  }
+  requestAnimationFrame(step)
+}
+
+/**
+ * 从筛选态回到「全部」：Hero 一边展开一边补滚动，
+ * 让列表在视觉上停在原地，而不是被 100vh 的大图顶下去（用户反馈的「跳回 Hero」）。
+ * 展开 520ms，这里跟 640ms，避免最后一帧还没补完。
+ */
+function expandHeroKeepingFeed() {
+  const el = listRef.value
+  const hero = heroRef.value
+  if (!el || !hero) return
+  const startTop = el.getBoundingClientRect().top
+  let raf = 0
+  let done = false
+
+  const correct = () => {
+    const drift = el.getBoundingClientRect().top - startTop
+    if (drift > 0.5) window.scrollBy(0, drift)
+  }
+  const track = () => {
+    if (done) return
+    correct()
+    raf = requestAnimationFrame(track)
+  }
+  const stop = (event?: TransitionEvent) => {
+    if (done) return
+    if (event && (event.propertyName !== 'height' || event.target !== hero)) return
+    done = true
+    cancelAnimationFrame(raf)
+    correct()
+    /* 再补两次：图片解码 / 列表重排可能让高度晚一帧稳定 */
+    requestAnimationFrame(correct)
+    window.setTimeout(() => {
+      correct()
+      /* 收口：把 Hero 底边精确贴到视口顶边（scrollY = Hero 文档底坐标），
+         既不留一条图，导航也刚好完整露出 */
+      const heroEl = heroRef.value
+      const target = heroEl
+        ? heroEl.getBoundingClientRect().bottom + window.scrollY
+        : el.getBoundingClientRect().top + window.scrollY - 96
+      smoothScrollTo(Math.max(0, target), 220)
+    }, 140)
+  }
+
+  raf = requestAnimationFrame(track)
+  hero.addEventListener('transitionend', stop)
+  window.setTimeout(() => {
+    hero.removeEventListener('transitionend', stop)
+    stop()
+  }, 1200)
+}
+
+/** 筛选态 Hero 已收起，直接回到页顶（导航下方就是列表） */
+function scrollToTop() {
+  smoothScrollTo(0)
 }
 
 /** 把 feed 顶部对齐到导航下方，避免收起置顶时内容整体窜动 */
@@ -94,17 +215,20 @@ function scrollToFeed() {
   const el = listRef.value
   if (!el) return
   const top = el.getBoundingClientRect().top + window.scrollY - 96
-  window.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+  smoothScrollTo(Math.max(0, top))
 }
 
 function onDocPointerDown(event: PointerEvent) {
-  if (!menuOpen.value) return
-  const wrap = catWrapRef.value
-  if (wrap && !wrap.contains(event.target as Node)) menuOpen.value = false
+  const el = event.target as HTMLElement | null
+  if (el?.closest?.('.head-tools')) return
+  menuOpen.value = false
+  topicMenuOpen.value = false
 }
 
 function onDocKeydown(event: KeyboardEvent) {
-  if (event.key === 'Escape') menuOpen.value = false
+  if (event.key !== 'Escape') return
+  menuOpen.value = false
+  topicMenuOpen.value = false
 }
 
 /** 首页每段最多展示几条置顶，超出折叠 */
@@ -113,6 +237,14 @@ const pinnedArticles = computed(() => articles.value.filter((a) => a.topped))
 const shownPinned = computed(() => pinnedArticles.value.slice(0, PINNED_LIMIT))
 const hiddenPinnedCount = computed(() => Math.max(0, pinnedArticles.value.length - PINNED_LIMIT))
 const normalArticles = computed(() => articles.value.filter((a) => !a.topped))
+/** 专题视图下去掉「置顶」标：专题是按时间策展的列表，置顶语义不适用 */
+const topicDisplayArticles = computed(() => topicArticles.value.map((a) => ({ ...a, topped: false })))
+/** 任何筛选生效时收起 Hero：短列表页不该还露着上一屏大图 */
+const isFiltered = computed(() => !!(activeCategory.value || activeKeyword.value || activeTopic.value))
+/** 首帧不播收起动画（深链直接带 ?category= 时不该看到 Hero 闪一下） */
+const heroReady = ref(false)
+/** 正在恢复到「点击文章前的滚动位置」：这期间先别画，免得先露一帧错误位置 */
+const restoring = ref(false)
 const total = ref(0)
 const page = ref(1)
 const loading = ref(false)
@@ -144,17 +276,66 @@ async function loadArticles() {
     const result = await publicApi.articles({
       pageNum: page.value,
       pageSize: PAGE_SIZE,
-      ...(activeCategory.value ? { categoryId: activeCategory.value.id } : {})
+      ...(activeCategory.value ? { categoryId: activeCategory.value.id } : {}),
+      ...(activeKeyword.value ? { keyword: activeKeyword.value } : {})
     })
     articles.value = result.records ?? result.list ?? []
     total.value = result.total ?? 0
-    if (!activeCategory.value) totalAll.value = total.value
+    if (!activeCategory.value && !activeKeyword.value) totalAll.value = total.value
   } catch {
     articles.value = []
     total.value = 0
     error.value = '文章加载失败，请稍后重试'
   } finally {
     loading.value = false
+  }
+}
+
+function findTopic(slug: unknown) {
+  const key = typeof slug === 'string' ? slug : ''
+  return key ? topics.value.find((t) => t.slug === key) ?? null : null
+}
+
+/** 选中专题：置顶收起，拉该专题的文章，概述卡占据置顶块的位置 */
+async function applyTopic(topic: Topic | null) {
+  activeTopic.value = topic
+  topicMenuOpen.value = false
+  /* 三个筛选条件互斥 */
+  activeCategory.value = null
+  activeKeyword.value = ''
+  profileKeyword.value = ''
+  menuOpen.value = false
+  page.value = 1
+
+  if (topic) {
+    try {
+      const detail = await publicApi.topic(topic.slug)
+      topicArticles.value = detail.articles ?? []
+      activeTopic.value = detail.topic ?? topic
+    } catch {
+      topicArticles.value = []
+    }
+    scrollToTop()
+  } else {
+    topicArticles.value = []
+    await loadArticles()
+    expandHeroKeepingFeed()
+  }
+
+  const query = { ...route.query }
+  if (topic) query.topic = topic.slug
+  else delete query.topic
+  delete query.category
+  delete query.keyword
+  delete query.page
+  router.replace({ path: '/', query })
+}
+
+async function loadTopics() {
+  try {
+    topics.value = await publicApi.topics()
+  } catch {
+    topics.value = []
   }
 }
 
@@ -174,7 +355,7 @@ function scrollToList() {
   /* 正好滚到 Hero 底边：背景图只留在首屏，内容区顶部是 76px 的留白 */
   const hero = document.querySelector('.hero') as HTMLElement | null
   if (!hero) return
-  window.scrollTo({ top: hero.offsetHeight, behavior: 'smooth' })
+  smoothScrollTo(hero.offsetHeight)
 }
 
 
@@ -182,6 +363,102 @@ function changePage(next: number) {
   page.value = next
   loadArticles()
   scrollToList()
+  /* 页码进 URL：从详情页返回时才能回到同一页 */
+  const query = { ...route.query }
+  if (next > 1) query.page = String(next)
+  else delete query.page
+  router.replace({ path: '/', query })
+}
+
+/* ===== 从详情页返回：恢复列表滚动位置 ===== */
+const HOME_SCROLL_KEY = 'fcdzy_home_scroll'
+
+type ScrollMemory = { fullPath: string; y: number } | null
+
+/** 必须在挂载最开始读：Hero 收起/展开会触发滚动事件，晚读会被 0 覆盖 */
+function readScrollMemory(): ScrollMemory {
+  try {
+    return JSON.parse(sessionStorage.getItem(HOME_SCROLL_KEY) ?? 'null') as ScrollMemory
+  } catch {
+    return null
+  }
+}
+
+/**
+ * 等 Hero 高度稳定（筛选态挂载时会从 100vh 收到 0），最多等 900ms。
+ * 用 setTimeout 轮询而不是 rAF：标签页无渲染时 rAF 不推进。
+ */
+function waitHeroSettled(max = 900) {
+  const hero = heroRef.value
+  if (!hero) return Promise.resolve()
+  return new Promise<void>((resolve) => {
+    const started = Date.now()
+    let last = -1
+    const tick = () => {
+      const h = hero.getBoundingClientRect().height
+      if (Math.abs(h - last) < 0.5 || Date.now() - started > max) {
+        resolve()
+        return
+      }
+      last = h
+      window.setTimeout(tick, 50)
+    }
+    tick()
+  })
+}
+
+/** 离开首页时记下位置；只有去文章详情才值得记 */
+onBeforeRouteLeave((to) => {
+  if (!to.path.startsWith('/article/')) {
+    try {
+      sessionStorage.removeItem(HOME_SCROLL_KEY)
+    } catch {
+      /* ignore */
+    }
+    return
+  }
+  try {
+    sessionStorage.setItem(
+      HOME_SCROLL_KEY,
+      JSON.stringify({ fullPath: route.fullPath, y: Math.round(window.scrollY) })
+    )
+  } catch {
+    /* 隐私模式下不可用，忽略 */
+  }
+})
+
+/**
+ * 只处理「从文章详情按返回」这一种情况：
+ * 数据加载完再滚，避免页面还没撑开就被截断回顶部。
+ */
+async function restoreHomeScroll(saved: ScrollMemory, cameBack: boolean) {
+  if (!saved || saved.y < 40) return
+  if (!cameBack) return
+  if (saved.fullPath !== route.fullPath) return
+  /* 用掉就清掉，避免下次普通进入首页时又恢复一次 */
+  try {
+    sessionStorage.removeItem(HOME_SCROLL_KEY)
+  } catch {
+    /* ignore */
+  }
+
+  /* 筛选态挂载时 Hero 会收起（520ms），等高度稳定再滚，否则会被随后的收缩夹回 0 */
+  await waitHeroSettled()
+  const target = saved.y
+  await nextTick()
+  /* 数据和图片还没把页面撑够时会滚不到，1.2s 内反复校正 */
+  await new Promise<void>((resolve) => {
+    const started = Date.now()
+    const step = () => {
+      window.scrollTo(0, target)
+      if (Math.abs(window.scrollY - target) < 2 || Date.now() - started > 1200) {
+        resolve()
+        return
+      }
+      window.setTimeout(step, 60)
+    }
+    step()
+  })
 }
 
 watch(
@@ -198,9 +475,44 @@ watch(
 
 
 onMounted(async () => {
+  /* 先读记忆与「是不是后退」标记，再等任何异步 */
+  const scrollMemory = readScrollMemory()
+  let cameBack = false
+  try {
+    cameBack = sessionStorage.getItem('fcdzy_nav_back') === '1'
+    sessionStorage.removeItem('fcdzy_nav_back')
+  } catch {
+    cameBack = false
+  }
+  restoring.value = !!cameBack && !!scrollMemory && scrollMemory.y >= 40
+  requestAnimationFrame(() => {
+    window.setTimeout(() => {
+      heroReady.value = true
+    }, 120)
+  })
   await loadCategories()
+  await loadTopics()
   activeCategory.value = findCategory(route.query.category)
-  loadArticles()
+  /* ?page=2 直接打开 / 从详情返回时停在同一页 */
+  const pageParam = Math.floor(Number(route.query.page))
+  if (Number.isFinite(pageParam) && pageParam > 1) page.value = pageParam
+  /* ?keyword= 直接打开时也进搜索态 */
+  const kw = typeof route.query.keyword === 'string' ? route.query.keyword.trim() : ''
+  if (kw) {
+    activeKeyword.value = kw
+    profileKeyword.value = kw
+  }
+  /* ?topic= 直接打开时进专题态 */
+  const topicSlug = typeof route.query.topic === 'string' ? route.query.topic : ''
+  const topic = findTopic(topicSlug)
+  if (topic) await applyTopic(topic)
+  else await loadArticles()
+  try {
+    await restoreHomeScroll(scrollMemory, cameBack)
+  } finally {
+    /* 恢复成功或放弃，都要把页面放出来 */
+    restoring.value = false
+  }
   document.addEventListener('pointerdown', onDocPointerDown)
   document.addEventListener('keydown', onDocKeydown)
 })
@@ -209,6 +521,34 @@ onBeforeUnmount(() => {
   document.removeEventListener('pointerdown', onDocPointerDown)
   document.removeEventListener('keydown', onDocKeydown)
 })
+
+/** 浏览器前进/后退改变了 ?topic= 时同步专题状态 */
+watch(
+  () => route.query.topic,
+  async (slug) => {
+    if (route.path !== '/') return
+    const next = findTopic(slug)
+    if ((next?.id ?? null) === (activeTopic.value?.id ?? null)) return
+    if (next) await applyTopic(next)
+    else {
+      activeTopic.value = null
+      topicArticles.value = []
+      loadArticles()
+    }
+  }
+)
+
+/** 浏览器前进/后退改变了 ?page= 时同步页码 */
+watch(
+  () => route.query.page,
+  (next) => {
+    if (route.path !== '/') return
+    const target = Math.max(1, Math.floor(Number(next)) || 1)
+    if (target === page.value) return
+    page.value = target
+    loadArticles()
+  }
+)
 
 /** 浏览器前进/后退改变了 ?category= 时同步过滤状态 */
 watch(
@@ -225,7 +565,10 @@ watch(
 </script>
 
 <template>
-  <div class="home">
+  <div
+    class="home"
+    :class="{ 'is-filtered': isFiltered, 'is-ready': heroReady, 'is-restoring': restoring }"
+  >
     <!-- ===== Hero：整幅背景图（鼠标视差 + 光斑） ===== -->
     <section ref="heroRef" class="hero" @pointermove="onHeroPointer" @pointerleave="onHeroLeave">
       <!-- 背景：2.5D 三层视差（移动端回落到后台配置的图片） -->
@@ -308,7 +651,6 @@ watch(
 
           <nav class="profile-nav">
             <router-link class="nav-item is-on" to="/">首页</router-link>
-            <router-link class="nav-item" to="/articles">文章</router-link>
             <router-link class="nav-item" to="/categories">分类 / 专题</router-link>
             <router-link class="nav-item" to="/about">关于</router-link>
           </nav>
@@ -339,13 +681,17 @@ watch(
             <el-button type="primary" plain @click="loadArticles">重新加载</el-button>
           </div>
 
-          <div v-else-if="!articles.length" class="card empty">
-            <p>还没有发布任何文章</p>
+          <div v-else-if="!articles.length && !activeTopic" class="card empty">
+            <template v-if="activeKeyword">
+              <p>没有找到匹配「{{ activeKeyword }}」的文章</p>
+              <button type="button" class="clear-btn" @click="clearSearch">清除搜索</button>
+            </template>
+            <p v-else>还没有发布任何文章</p>
           </div>
 
           <template v-else>
             <!-- 置顶段：选了分类就整段收起，下面的列表自然上移补位 -->
-            <section v-if="!activeCategory && shownPinned.length" class="feed-block">
+            <section v-if="!activeCategory && !activeKeyword && !activeTopic && shownPinned.length" class="feed-block">
               <div class="block-head">
                 <h2>置顶</h2>
                 <span class="block-count">{{ pinnedArticles.length }} 篇</span>
@@ -357,12 +703,14 @@ watch(
             </section>
 
             <!-- 列表段：默认「最新」，选中分类后变成该分类，工具条位置不动 -->
-            <section v-if="activeCategory || normalArticles.length" class="feed-block">
+            <section v-if="activeCategory || activeKeyword || activeTopic || normalArticles.length" class="feed-block">
               <div class="block-head">
-                <h2>{{ activeCategory ? activeCategory.name : '最新' }}</h2>
+                <h2 v-if="activeKeyword">搜索：“{{ activeKeyword }}”</h2>
+                <h2 v-else-if="activeTopic">{{ activeTopic.name }}</h2>
+                <h2 v-else>{{ activeCategory ? activeCategory.name : '最新' }}</h2>
 
-                <div ref="catWrapRef" class="head-tools">
-                  <div class="cat-wrap">
+                <div class="head-tools">
+                  <div v-if="!activeKeyword" class="cat-wrap">
                     <button
                       type="button"
                       class="cat-btn"
@@ -403,16 +751,79 @@ watch(
                     </div>
                   </div>
 
-                  <router-link v-if="!activeCategory" class="more" to="/articles">全部文章</router-link>
-                  <span v-else class="block-count">{{ total }} 篇</span>
+                  <div v-if="!activeKeyword" class="cat-wrap">
+                    <button
+                      type="button"
+                      class="cat-btn"
+                      :class="{ 'is-open': topicMenuOpen }"
+                      :aria-expanded="topicMenuOpen"
+                      aria-haspopup="menu"
+                      @click="topicMenuOpen = !topicMenuOpen"
+                    >
+                      {{ activeTopic ? '切换专题' : '专题' }}
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+
+                    <div v-if="topicMenuOpen" class="cat-menu" role="menu">
+                      <button
+                        type="button"
+                        class="cat-item"
+                        :class="{ 'is-active': !activeTopic }"
+                        role="menuitem"
+                        @click="applyTopic(null)"
+                      >
+                        <span>全部文章</span>
+                        <span class="cat-num">{{ totalAll }}</span>
+                      </button>
+                      <button
+                        v-for="topic in topics"
+                        :key="topic.id"
+                        type="button"
+                        class="cat-item"
+                        :class="{ 'is-active': activeTopic?.id === topic.id }"
+                        role="menuitem"
+                        @click="applyTopic(topic)"
+                      >
+                        <span>{{ topic.name }}</span>
+                        <span class="cat-num">{{ topic.articleCount ?? 0 }}</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  <span class="block-count">{{ activeTopic ? topicArticles.length : total }} 篇</span>
+                  <button v-if="activeKeyword" type="button" class="clear-btn" @click="clearSearch">清除</button>
                 </div>
               </div>
 
-              <TimelineList :articles="activeCategory ? articles : normalArticles" :thumb-width="104" compact />
+              <!-- 专题概述：占据置顶块收起来后空出的位置 -->
+              <div v-if="activeTopic" class="topic-overview">
+                <div class="topic-overview-body">
+                  <p class="topic-desc">{{ activeTopic.description || '这个专题还没有写简介。' }}</p>
+                  <p class="topic-meta">
+                    <template v-if="topicArticles.length">{{ topicArticles.length }} 篇文章 · 按发布时间倒序</template>
+                    <template v-else>
+                      这个专题还没有文章 ·
+                      <button type="button" class="clear-btn" @click="applyTopic(null)">返回全部文章</button>
+                    </template>
+                  </p>
+                </div>
+                <div v-if="activeTopic.coverImage" class="topic-cover">
+                  <img :src="optimizeImage(activeTopic.coverImage, { width: 400, quality: 86 })" :alt="activeTopic.name" />
+                </div>
+              </div>
+
+              <TimelineList
+                v-if="activeTopic ? topicArticles.length : true"
+                :articles="activeTopic ? topicDisplayArticles : activeCategory || activeKeyword ? articles : normalArticles"
+                :thumb-width="104"
+                compact
+              />
             </section>
           </template>
 
-          <AppPagination :total="total" :page="page" :size="PAGE_SIZE" @change="changePage" />
+          <AppPagination v-if="!activeTopic" :total="total" :page="page" :size="PAGE_SIZE" @change="changePage" />
         </div>
       </div>
 
@@ -428,10 +839,31 @@ watch(
   display: flex;
   align-items: center;
   /* 全屏 Hero：svh 让移动端地址栏收放时不跳动，老浏览器退回 vh */
-  min-height: 100vh;
-  min-height: 100svh;
+  height: 100vh;
+  height: 100svh;
   overflow: hidden;
   isolation: isolate;
+}
+
+/* 筛选态（分类 / 专题 / 搜索）整块收起，列表直接从导航下方开始 */
+/* 恢复滚动位置期间先隐藏，位置对上后再淡入，避免「先跳一下再回位」 */
+.home {
+  transition: opacity 0.16s ease;
+}
+
+.home.is-restoring {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.home.is-ready .hero {
+  transition: height 0.52s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.36s ease;
+}
+
+.home.is-filtered .hero {
+  height: 0;
+  opacity: 0;
+  pointer-events: none;
 }
 
 .hero-bg {
@@ -555,11 +987,11 @@ watch(
   top: calc(var(--header-height, 62px) + 16px);
   padding: 18px 16px 14px;
   text-align: center;
-  /* 白卡要和浅灰底分开：1px 淡边 + 极轻阴影，否则白天会「融」进背景 */
-  background: #ffffff;
-  border: 1px solid rgba(16, 24, 40, 0.08);
-  border-radius: 8px;
-  box-shadow: 0 6px 18px rgba(16, 24, 40, 0.06);
+  /* 和文章卡片同一套哑光浮起：同投影、同圆角，不另立一套 */
+  background: var(--card-surface);
+  border: 1px solid var(--card-edge);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
 }
 
 
@@ -699,7 +1131,8 @@ watch(
 .stream {
   display: flex;
   flex-direction: column;
-  gap: 11px;
+  /* 卡片有了投影，间距放宽一点，阴影才不会互相压住 */
+  gap: 16px;
   min-width: 0;
   /* 卡片在 1148px 处截断：补 205px 右侧留白，个人卡位置不动 */
   padding-right: 205px;
@@ -720,16 +1153,25 @@ watch(
 
 .block-head h2 {
   margin: 0;
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0.14em;
+  /* 13.5 / 700：比颗粒度更重的标签，但和 16px 卡片标题仍留 2.5px 层级差 */
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   color: var(--text-1);
 }
 
-.block-head .block-count,
+.block-head .block-count {
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
+  /* 实心近黑：和「置顶 / 最新」小标题同一视觉重量 */
+  color: var(--ui-strong);
+  text-shadow: var(--ui-strong-shadow);
+  text-decoration: none;
+}
+
 .block-head .more {
-  font-size: 11.5px;
-  letter-spacing: 0.06em;
+  font-size: 13.5px;
+  letter-spacing: 0.04em;
   color: var(--text-3);
   text-decoration: none;
 }
@@ -745,6 +1187,81 @@ watch(
   align-items: baseline;
 }
 
+/* 搜索态的「清除」：和分类按钮同一档视觉重量 */
+.clear-btn {
+  padding: 0;
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  color: var(--ui-strong);
+  text-shadow: var(--ui-strong-shadow);
+  background: none;
+  border: 0;
+  cursor: pointer;
+  transition: color 0.16s ease;
+}
+
+.clear-btn:hover {
+  color: var(--row-title);
+}
+
+/* ---- 专题概述：占住置顶块收起来后空出的位置 ---- */
+.topic-overview {
+  display: flex;
+  gap: 20px;
+  align-items: center;
+  justify-content: space-between;
+  /* 和文章卡片同宽：左边让出时间轴日期列（64px 列 + 22px 内距） */
+  margin: 0 0 18px 86px;
+  padding: 18px 20px;
+  background: var(--card-surface);
+  border: 1px solid var(--card-line);
+  border-radius: 10px;
+}
+
+.topic-overview-body {
+  min-width: 0;
+}
+
+.topic-desc {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.75;
+  color: var(--row-summary);
+}
+
+.topic-meta {
+  margin: 8px 0 0;
+  font-size: 11.5px;
+  letter-spacing: 0.3px;
+  color: var(--meta-faint);
+}
+
+.topic-cover {
+  flex: none;
+  width: 138px;
+  height: 138px;
+  overflow: hidden;
+  background: var(--surface-muted, rgba(15, 23, 42, 0.05));
+  border: 1px solid var(--image-line);
+  border-radius: 6px;
+}
+
+.topic-cover img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.topic-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  align-items: center;
+  padding: 34px 20px;
+}
+
 .cat-wrap {
   position: relative;
 }
@@ -754,10 +1271,12 @@ watch(
   gap: 4px;
   align-items: center;
   padding: 0;
-  font-size: 11.5px;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  color: var(--text-3);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  /* 实心近黑 + 极轻投影：对应参考图那种厚重感 */
+  color: var(--ui-strong);
+  text-shadow: var(--ui-strong-shadow);
   background: none;
   border: 0;
   cursor: pointer;
@@ -797,7 +1316,8 @@ watch(
   justify-content: space-between;
   width: 100%;
   padding: 8px 10px;
-  font-size: 12.5px;
+  /* 跟着工具条一起放大，菜单项和按钮同一档 */
+  font-size: 13px;
   color: var(--text-2);
   text-align: left;
   background: none;
@@ -818,7 +1338,7 @@ watch(
 }
 
 .cat-num {
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--meta-faint, var(--text-3));
   font-variant-numeric: tabular-nums;
 }
@@ -844,6 +1364,10 @@ watch(
 
 /* ===================== 响应式 ===================== */
 @media (max-width: 960px) {
+  .topic-overview {
+    margin-left: 86px;
+  }
+
   .hero {
     min-height: 300px;
   }

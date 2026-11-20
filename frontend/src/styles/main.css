@@ -1054,6 +1054,9 @@ html.dark .home .card-media.is-empty {
   --row-line: rgba(0, 0, 0, 0.12);
   --row-hover: rgba(0, 0, 0, 0.03);
   --row-title: #111111;
+  /* 工具条小字：实心近黑 + 极轻投影，替代原来的灰字 */
+  --ui-strong: #14181d;
+  --ui-strong-shadow: 0 1px 1px rgba(16, 24, 40, 0.10);
   --row-summary: #333333;
   --meta-faint: #6b6b6b;
   --image-line: rgba(0, 0, 0, 0.13);
@@ -1063,6 +1066,8 @@ html.dark {
   --row-line: rgba(255, 255, 255, 0.08);
   --row-hover: rgba(255, 255, 255, 0.03);
   --row-title: #ededed;
+  --ui-strong: #e9edf3;
+  --ui-strong-shadow: 0 1px 1px rgba(0, 0, 0, 0.45);
   --row-summary: #a3a3a3;
   --meta-faint: #7d7d7d;
   --image-line: rgba(255, 255, 255, 0.12);
@@ -1082,17 +1087,25 @@ html.dark .category-card {
   background: transparent;
   border-bottom-color: var(--row-line);
 }
-/* ==================== A 方案：每篇一张卡片 ==================== */
+/* ==================== A 方案：每篇一张卡片（哑光浮起） ==================== */
 :root {
   --card-surface: #ffffff;
-  --card-surface-hover: #fcfdff;
+  --card-surface-hover: #f8fafd;
+  /* 哑光浮起：靠底部扩散的柔和投影定型，不再用硬描边 */
+  --card-shadow: 0 1px 1px rgba(16, 24, 40, 0.05), 0 14px 30px -14px rgba(16, 24, 40, 0.26);
+  --card-shadow-hover: 0 2px 3px rgba(16, 24, 40, 0.06), 0 22px 44px -18px rgba(16, 24, 40, 0.34);
+  --card-edge: transparent;
   --card-line: rgba(16, 24, 40, 0.08);
   --card-line-hover: rgba(16, 24, 40, 0.18);
 }
 
 html.dark {
   --card-surface: #1f2c3a;
-  --card-surface-hover: #253445;
+  --card-surface-hover: #26374a;
+  /* 深色底上黑投影只会糊成一团，改成「一圈微光 + 极浅外扩」表现浮起 */
+  --card-shadow: 0 0 0 1px rgba(255, 255, 255, 0.04), 0 10px 24px -18px rgba(0, 0, 0, 0.45);
+  --card-shadow-hover: 0 0 0 1px rgba(255, 255, 255, 0.1), 0 14px 30px -18px rgba(0, 0, 0, 0.5);
+  --card-edge: rgba(255, 255, 255, 0.06);
   --card-line: rgba(255, 255, 255, 0.07);
   --card-line-hover: rgba(255, 255, 255, 0.16);
 }
@@ -1129,4 +1142,12 @@ html.dark {
   --cat-2: #f9a8d4;
   --cat-3: #5eead4;
   --cat-4: #fde68a;
+}
+
+/* 后退/前进（浏览器 popstate）时整站不播路由过渡：
+   首页要等接口回来才恢复到原来的滚动位置，先淡出再淡入就会「闪一下」。
+   标记由 frontend/src/router/index.ts 的 popstate 监听同步挂在 <html> 上。 */
+html.nav-back .page-enter-active,
+html.nav-back .page-leave-active {
+  transition: none !important;
 }

@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ElMessage } from 'element-plus'
+import { ElMessage, ElMessageBox } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { adminApi } from '@/api'
 import type { Article, Stats, ViewTrend } from '@/types'
@@ -127,12 +127,33 @@ async function load() {
   }
 }
 
+/** 清空全部前端错误记录（危险动作，先确认） */
 async function clearClientErrors() {
+  try {
+    await ElMessageBox.confirm(
+      '会删除所有前端错误记录（包括还没看的），删掉就找不回来了。',
+      '清空全部错误？',
+      { type: 'warning', confirmButtonText: '清空', cancelButtonText: '算了' }
+    )
+  } catch {
+    return
+  }
   try {
     await adminApi.clearClientErrors()
     clientErrors.value = []
     clientErrorCount.value = 0
     ElMessage.success('已清空前端错误记录')
+  } catch {
+    // 提示由 api 层处理
+  }
+}
+
+/** 只清理「发版后旧页面去要已删除分包」这类噪音 */
+async function clearNoise() {
+  try {
+    const removed = await adminApi.clearClientErrorNoise()
+    ElMessage.success(removed > 0 ? `已清理 ${removed} 条过期分包噪音` : '没有可清理的过期分包记录')
+    await load()
   } catch {
     // 提示由 api 层处理
   }
@@ -240,9 +261,10 @@ onMounted(load)
             <span class="error-count">
               {{ clientErrorCount > 0 ? `近 24 小时 ${clientErrorCount} 条` : '近 24 小时 0 条' }}
             </span>
-            <el-button v-if="clientErrorCount > 0" text type="danger" size="small" @click="clearClientErrors">
-              清空
-            </el-button>
+            <div v-if="clientErrorCount > 0" class="error-actions">
+              <el-button text size="small" @click="clearNoise">清理噪音</el-button>
+              <el-button text type="danger" size="small" @click="clearClientErrors">清空</el-button>
+            </div>
           </div>
           <p v-if="!clientErrors.length" class="error-hint">
             最近没有前端报错。用户端出错时，这里会记录错误信息与出错页面。
@@ -508,6 +530,13 @@ onMounted(load)
   margin-left: auto;
   font-size: 11.5px;
   color: var(--admin-faint);
+}
+
+.error-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
 }
 
 .error-hint {

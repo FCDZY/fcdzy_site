@@ -24,4 +24,16 @@ public interface ClientErrorRepository extends JpaRepository<ClientError, Long> 
     @Modifying
     @Query("delete from ClientError c")
     int deleteAllRows();
+
+    /**
+     * 删掉「发版后旧页面去要已删除分包」这类噪音：
+     * 它们不是真 bug，前端已经改成自动刷新一次，留着只会淹没真正的错误。
+     */
+    @Transactional
+    @Modifying
+    @Query("""
+        delete from ClientError c
+        where c.message like %:a% or c.message like %:b% or c.message like %:c%
+        """)
+    int deleteStaleChunkRows(String a, String b, String c);
 }

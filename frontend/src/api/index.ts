@@ -106,6 +106,8 @@ export const adminApi = {
     }),
   clientErrorCount: () => request<number>({ url: '/admin/client-errors/count', method: 'get' }),
   clearClientErrors: () => request<number>({ url: '/admin/client-errors', method: 'delete' }),
+  clearClientErrorNoise: () =>
+    request<number>({ url: '/admin/client-errors/noise', method: 'delete' }),
 
   categoryList: () => request<Category[]>({ url: '/admin/categories', method: 'get' }),
   categoryCreate: (data: CategoryForm) => request<Category>({ url: '/admin/categories', method: 'post', data }),

@@ -31,7 +31,8 @@ const PROBE = `(() => {
   const cs = (el) => (el ? getComputedStyle(el) : null)
   const rows = Array.from(document.querySelectorAll('.stream .article-row'))
   const first = rows[0] || null
-  const media = first ? first.querySelector('.card-media') : null
+  const coverRow = rows.find((r) => r.querySelector('.card-media')) || null
+  const media = coverRow ? coverRow.querySelector('.card-media') : null
   const title = first ? first.querySelector('.row-title') : null
   const summary = first ? first.querySelector('.row-summary') : null
   const meta = first ? first.querySelector('.row-meta') : null
@@ -45,7 +46,9 @@ const PROBE = `(() => {
     display: first ? cs(first).display : '',
   mediaWidth: media ? Math.round(media.getBoundingClientRect().width) : 0,
   mediaHeight: media ? Math.round(media.getBoundingClientRect().height) : 0,
-    mediaOnRight: media && title ? media.getBoundingClientRect().left > title.getBoundingClientRect().left : false,
+    mediaOnRight: media && coverRow ? media.getBoundingClientRect().left > coverRow.querySelector('.row-title').getBoundingClientRect().left : false,
+    mediaFlushRight: media && coverRow ? Math.abs(media.getBoundingClientRect().right - coverRow.getBoundingClientRect().right) <= 2 : false,
+    coverCardHeight: coverRow ? Math.round(coverRow.getBoundingClientRect().height) : 0,
     cardHeight: r ? Math.round(r.height) : 0,
     bg: first ? cs(first).backgroundColor : '',
     radius: first ? cs(first).borderTopLeftRadius : '',
@@ -109,7 +112,8 @@ const PROBE = `(() => {
 
   try {
     await send('Emulation.setDeviceMetricsOverride', { width: 1440, height: 900, deviceScaleFactor: 1, mobile: false })
-    await send('Page.navigate', { url: BASE + '/' })
+    // 用关键词收敛到「既有封面、又无封面」的一页：首页第 1 页可能全是无封面的测试文章
+  await send('Page.navigate', { url: BASE + '/?keyword=java' })
     await sleep(1500)
     await evaluate(`localStorage.setItem('fcdzy_theme','light'); location.reload()`)
     await sleep(4200)
@@ -118,10 +122,12 @@ const PROBE = `(() => {
     console.log('【需求 1】列表结构：文字在左、缩略图固定 168px 在右')
     check('渲染出了文章行', before.cardCount > 0, `${before.cardCount} 行`)
     check('两列网格（文字 + 缩略图）', before.display === 'grid', before.display)
-check('缩略图是 138px 正方形', Math.abs(before.mediaWidth - 138) <= 2 && Math.abs(before.mediaHeight - 138) <= 2, before.mediaWidth + 'x' + before.mediaHeight)
+check('缩略图 260 宽、撑满卡片高度', Math.abs(before.mediaWidth - 260) <= 2 && Math.abs(before.mediaHeight - before.coverCardHeight) <= 3, before.mediaWidth + 'x' + before.mediaHeight + ' / card ' + before.coverCardHeight)
+  check('缩略图贴住卡片右边缘（通栏）', before.mediaFlushRight === true)
     check('缩略图始终在右（不再交替）', before.mediaOnRight === true)
+  check('有封面的卡片高 200', Math.abs(before.coverCardHeight - 200) <= 3, String(before.coverCardHeight))
     check('行高 120~240px', before.cardHeight >= 120 && before.cardHeight <= 240, `${before.cardHeight}px`)
-    check('行是卡片：10px 圆角', before.radius === '10px', before.radius)
+    check('行是卡片：14px 圆角（哑光浮起）', before.radius === '14px', before.radius)
     check('行是卡片：白底（浅色）', before.bg === 'rgb(255, 255, 255)', before.bg)
     check('行有 1px 卡片描边', before.borderBottom.startsWith('1px'), before.borderBottom)
 
@@ -152,6 +158,16 @@ check('缩略图是 138px 正方形', Math.abs(before.mediaWidth - 138) <= 2 && 
     }
 
     console.log('\n【需求 5】hover：底色变淡 + 标题变色（不上浮）')
+    // headless 空闲时不出帧，CSS 过渡的动画时钟不推进，getComputedStyle 会一直返回过渡起始值（白底）。
+    // 这里把过渡时长压成 0，只影响测量；transition-property 仍保留，供「声明了过渡」的断言使用。
+    await evaluate(`(() => {
+      if (document.getElementById('smoke-no-transition')) return
+      const style = document.createElement('style')
+      style.id = 'smoke-no-transition'
+      style.textContent = '* { transition-duration: 0s !important; animation-duration: 0s !important }'
+      document.head.appendChild(style)
+    })()`)
+    await sleep(120)
     // Hero 现在占满一屏，第一条在视口外：先滚到它，否则 hover/click 打不到
     await evaluate(`document.querySelector('.stream .article-row').scrollIntoView({ block: 'center' })`)
     await sleep(700)

@@ -5,7 +5,7 @@ import { useRouter } from 'vue-router'
 /**
  * 顶部全站搜索：
  * - 收起态只显示放大镜图标；hover 或点击展开输入框（磨砂半透明胶囊，与导航风格一致）
- * - 回车或点击放大镜触发，跳转到 /articles?keyword=… 由文章列表页展示结果
+ * - 回车或点击放大镜触发，回到首页并以 ?keyword=… 展示结果（不跳页）
  * - 展开使用绝对定位向左生长，不会把导航菜单挤动
  */
 const router = useRouter()
@@ -38,7 +38,7 @@ function submit() {
     inputRef.value?.focus()
     return
   }
-  router.push({ path: '/articles', query: { keyword: value } })
+  router.push({ path: '/', query: { keyword: value } })
   keyword.value = ''
   open.value = false
   inputRef.value?.blur()

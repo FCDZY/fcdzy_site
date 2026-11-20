@@ -328,6 +328,16 @@ async function deleteTempArticles(token) {
     check('浅色下当前页为主题色', light.activeBg === 'rgb(59, 130, 246)', light.activeBg)
     check('浅色下总条数为主题灰', light.totalColor === 'rgb(107, 114, 128)', light.totalColor)
 
+    // headless 空闲时不出帧，主题色的过渡时钟不推进，读到的还是切换前的颜色；
+    // 测量前把过渡时长压成 0（transition-property 保留）。
+    await evaluate(`(() => {
+      if (document.getElementById('smoke-no-transition')) return
+      const style = document.createElement('style')
+      style.id = 'smoke-no-transition'
+      style.textContent = '* { transition-duration: 0s !important; animation-duration: 0s !important }'
+      document.head.appendChild(style)
+    })()`)
+    await sleep(120)
     // 切深色（先回到顶部才能点到 Hero 内的主题按钮）
     await evaluate('window.scrollTo({ top: 0, behavior: "auto" })')
     await sleep(500)

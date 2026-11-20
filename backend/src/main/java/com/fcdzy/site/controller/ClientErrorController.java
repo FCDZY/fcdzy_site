@@ -90,6 +90,15 @@ public class ClientErrorController {
         return ApiResponse.ok(repository.deleteAllRows());
     }
 
+    /** 只清理「过期分包」噪音（发版留下的，不是真错误） */
+    @DeleteMapping("/admin/client-errors/noise")
+    public ApiResponse<Integer> clearStaleChunkNoise() {
+        return ApiResponse.ok(repository.deleteStaleChunkRows(
+                "Failed to fetch dynamically imported module",
+                "Importing a module script failed",
+                "error loading dynamically imported module"));
+    }
+
     private boolean allow(String ip) {
         long now = System.currentTimeMillis();
         Deque<Long> queue = hits.computeIfAbsent(ip == null ? "unknown" : ip, key -> new ArrayDeque<>());

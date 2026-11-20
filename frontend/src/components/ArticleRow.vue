@@ -30,7 +30,7 @@ const props = withDefaults(
 
 const router = useRouter()
 
-const thumbUrl = computed(() => optimizeImage(props.article.coverImage || '', { width: 400, quality: 86 }))
+const thumbUrl = computed(() => optimizeImage(props.article.coverImage || '', { width: 640, quality: 88 }))
 const coverFailed = ref(false)
 const showCover = computed(() => !!thumbUrl.value && !coverFailed.value)
 
@@ -67,7 +67,7 @@ function open() {
 </script>
 
 <template>
-  <article class="article-card article-row" @click="open">
+  <article class="article-card article-row" :class="{ 'has-cover': showCover }" @click="open">
     <div class="row-body">
       <div class="row-meta">
         <span v-if="article.topped" class="row-topped">置顶</span>
@@ -99,8 +99,8 @@ function open() {
       </div>
     </div>
 
-    <div class="card-media" :class="{ 'is-empty': !showCover }" :style="mediaStyle">
-      <img v-if="showCover" :src="thumbUrl" :alt="article.title" loading="lazy" @error="coverFailed = true" />
+    <div v-if="showCover" class="card-media">
+      <img :src="thumbUrl" :alt="article.title" loading="lazy" @error="coverFailed = true" />
     </div>
   </article>
 </template>
@@ -109,51 +109,58 @@ function open() {
 .article-row {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 20px;
-  /* stretch：让图片槽位拿到与行内容相同的高度，正方形才有参照 */
+  /* 图片贴右边缘：卡片自身不留内边距，内边距交给文字块 */
+  gap: 0;
   align-items: stretch;
   /* A 方案：每篇一张实色卡片，靠卡片本身分隔，不再用横线 */
-  padding: 18px 20px;
+  padding: 0;
+  overflow: hidden;
   cursor: pointer;
   background: var(--card-surface);
-  border: 1px solid var(--card-line);
-  border-radius: 10px;
-  transition: background-color 0.18s ease, border-color 0.18s ease;
+  /* 哑光浮起：无硬描边，靠柔和投影定型；深色下用微光描边 */
+  border: 1px solid var(--card-edge);
+  border-radius: 14px;
+  box-shadow: var(--card-shadow);
+  transition: background-color 0.18s ease, box-shadow 0.22s ease, transform 0.22s ease;
+}
+
+/* 有封面：卡片抬到 200 高，图撑满整条右边 */
+.article-row.has-cover {
+  min-height: 200px;
 }
 
 .article-row:hover {
   background: var(--card-surface-hover);
-  border-color: var(--card-line-hover);
+  box-shadow: var(--card-shadow-hover);
+  transform: translateY(-2px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .article-row:hover {
+    transform: none;
+  }
 }
 
 .card-media {
+  width: 260px;
   overflow: hidden;
-  /* 正方形：边长 = 卡片内容高度（174 - 18×2 = 138），图片 cover 裁切 */
-  width: 138px;
-  height: 138px;
-  aspect-ratio: 1 / 1;
   background: var(--surface-muted, rgba(15, 23, 42, 0.05));
-  border: 1px solid var(--image-line);
-  border-radius: 6px;
 }
 .card-media img {
   display: block;
   width: 100%;
   height: 100%;
+  /* center 40%：横图裁切时保住上半部（人物头部、天空） */
   object-fit: cover;
-}
-
-/* 没有封面：虚线 + 极淡斜纹占位 */
-.card-media.is-empty {
-  border-style: dashed;
-  background-color: transparent;
-  background-image: repeating-linear-gradient(45deg, var(--image-line) 0 1px, transparent 1px 8px);
+  object-position: center 40%;
 }
 
 .row-body {
   display: flex;
   flex-direction: column;
+  justify-content: center;
   min-width: 0;
+  padding: 18px 20px;
 }
 
 /* 页码式注脚 */
@@ -266,16 +273,17 @@ function open() {
 }
 
 @media (max-width: 720px) {
-  .article-row {
-    gap: 12px;
-    padding: 14px 2px;
+  .article-row.has-cover {
+    min-height: 150px;
   }
 
-  /* 手机上按固定小方形，别让图片吃掉正文宽度 */
+  /* 手机上图片收窄，仍贴右边缘、撑满高度 */
   .card-media {
-    width: 76px;
-    height: 76px;
-    min-width: 0;
+    width: 108px;
+  }
+
+  .row-body {
+    padding: 14px 12px;
   }
 
   .row-title {
