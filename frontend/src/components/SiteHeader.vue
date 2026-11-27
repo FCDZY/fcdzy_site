@@ -347,6 +347,31 @@ const isActive = (to: string) => {
  * 白字在浅底上不可读，白字规则只保留给首页 Hero 的透明态（见上方 is-transparent 规则）。
  */
 
+/* 搜索胶囊：浅底上必须换成主题色，白色半透明在白天几乎看不见 */
+.site-header.is-solid :deep(.search-pill) {
+  background: var(--hdr-search-bg);
+  border-color: var(--hdr-search-line);
+}
+
+.site-header.is-solid :deep(.site-search:hover .search-pill),
+.site-header.is-solid :deep(.site-search.is-open .search-pill) {
+  background: var(--hdr-search-bg-hover);
+  border-color: var(--brand);
+}
+
+.site-header.is-solid :deep(.search-btn),
+.site-header.is-solid :deep(.search-input) {
+  color: var(--hdr-search-fg);
+}
+
+.site-header.is-solid :deep(.search-input::placeholder) {
+  color: var(--hdr-search-hold);
+}
+
+.site-header.is-solid :deep(.search-btn:hover) {
+  color: var(--brand);
+}
+
 .site-header.is-solid .nav a {
   color: var(--text-2);
 }

@@ -1,13 +1,15 @@
 <script setup lang="ts">
-import { nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import TocTree from '@/components/TocTree.vue'
+import { buildTocTree, findAncestorIds } from '@/components/toc-tree'
 import type { TocItem } from '@/composables/useMarkdown'
 
 /**
- * 文章详情页悬浮目录：
- * - 自动使用正文提取出的 h1 / h2 / h3 标题
- * - 页面滚动时高亮当前阅读章节（滚动侦测）
- * - 可收起 / 展开，偏好记在 localStorage
- * - 配色使用全局主题变量，深浅色自动适配
+ * 文章详情页悬浮目录（可折叠树）：
+ * - 用正文提取出的 h1 ~ h6 标题折成真正的嵌套树，每一级都能独立折叠
+ * - 默认只展开「当前阅读条目」的祖先链，其余折叠
+ * - 滚动时自动展开当前条目的祖先，但**绝不自动收起**你手动展开的
+ * - 可整体收起 / 展开，偏好记在 localStorage
  * - 宽屏（≥1500px）默认展开在正文左侧留白处，窄屏默认收起为胶囊按钮，避免遮挡正文
  */
 const props = defineProps<{ items: TocItem[] }>()
@@ -19,7 +21,64 @@ const WIDE_SCREEN = 1500
 const collapsed = ref(false)
 const activeId = ref('')
 const listRef = ref<HTMLElement | null>(null)
+/** 已展开的节点 id */
+const openIds = ref<string[]>([])
+/** 你手动收起过的节点 id：自动展开不再碰它们（C 策略的核心） */
+const closedIds = ref<string[]>([])
 let ticking = false
+
+/** 正文首个 h1 通常是文章标题（页面上已经有大标题），不进目录 */
+const visibleItems = computed(() => {
+  const items = props.items
+  if (items.length > 1 && items[0].level === 1 && items.some((item) => item.level > 1)) {
+    return items.slice(1)
+  }
+  return items
+})
+
+const tree = computed(() => buildTocTree(visibleItems.value))
+
+/** 当前高亮项 + 它的祖先（用于展开 / 高亮路径） */
+const activePath = computed(() => {
+  if (!activeId.value) return [] as string[]
+  const ancestors = findAncestorIds(tree.value, activeId.value) || []
+  return [...ancestors, activeId.value]
+})
+
+function isOpen(id: string) {
+  return openIds.value.includes(id)
+}
+
+function openNode(id: string) {
+  if (isOpen(id)) return
+  openIds.value = [...openIds.value, id]
+}
+
+function toggleNode(id: string) {
+  if (isOpen(id)) {
+    openIds.value = openIds.value.filter((x) => x !== id)
+    // 记下「手动收起」，之后的滚动不再把它顶开
+    if (!closedIds.value.includes(id)) closedIds.value = [...closedIds.value, id]
+    return
+  }
+  openIds.value = [...openIds.value, id]
+  closedIds.value = closedIds.value.filter((x) => x !== id)
+}
+
+/** 展开当前条目的祖先链（不收起任何东西） */
+function revealActive() {
+  const path = activePath.value
+  if (!path.length) return
+  const wanted = path.slice(0, -1)
+  // 当前就在某一个一级标题上时，把这一级展开，否则刚进文章只看得到几个一级标题
+  if (path.length === 1) wanted.push(path[0])
+  const merged = [...openIds.value]
+  for (const id of wanted) {
+    if (merged.includes(id) || closedIds.value.includes(id)) continue
+    merged.push(id)
+  }
+  if (merged.length !== openIds.value.length) openIds.value = merged
+}
 
 function initCollapsed() {
   try {
@@ -44,7 +103,7 @@ function persist() {
 
 /** 当前阅读章节：取最后一个越过阅读基准线（吸顶导航下方一点）的标题 */
 function updateActive() {
-  const headings = props.items
+  const headings = visibleItems.value
     .map((item) => document.getElementById(item.id))
     .filter((el): el is HTMLElement => !!el)
   if (!headings.length) return
@@ -65,6 +124,7 @@ function updateActive() {
   }
 
   activeId.value = current
+  revealActive()
   keepActiveVisible()
 }
 
@@ -72,7 +132,7 @@ function updateActive() {
 function keepActiveVisible() {
   const list = listRef.value
   if (!list || collapsed.value) return
-  const active = list.querySelector<HTMLElement>('.toc-item.active')
+  const active = list.querySelector<HTMLElement>('.toc-line.is-active')
   if (!active) return
   const listRect = list.getBoundingClientRect()
   const itemRect = active.getBoundingClientRect()
@@ -95,6 +155,7 @@ function goTo(id: string) {
   const target = document.getElementById(id)
   if (!target) return
   activeId.value = id
+  revealActive()
   // 标题自带 scroll-margin-top，会避开吸顶导航
   target.scrollIntoView({
     behavior: window.matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth',
@@ -113,7 +174,11 @@ function toggle() {
 
 watch(
   () => props.items,
-  () => nextTick(updateActive)
+  () => {
+    openIds.value = []
+    closedIds.value = []
+    nextTick(updateActive)
+  }
 )
 
 onMounted(() => {
@@ -151,16 +216,10 @@ onBeforeUnmount(() => {
             <el-icon :size="15"><Fold /></el-icon>
           </button>
         </div>
-        <ul ref="listRef" class="toc-list">
-          <li
-            v-for="item in items"
-            :key="item.id"
-            class="toc-item"
-            :class="[`level-${item.level}`, { active: item.id === activeId }]"
-          >
-            <a :href="`#${item.id}`" @click.prevent="goTo(item.id)">{{ item.text }}</a>
-          </li>
-        </ul>
+
+        <div ref="listRef" class="toc-list">
+          <TocTree :nodes="tree" :active-id="activeId" :open-ids="openIds" @toggle="toggleNode" @navigate="goTo" />
+        </div>
       </nav>
     </div>
   </Teleport>
@@ -171,9 +230,9 @@ onBeforeUnmount(() => {
   position: fixed;
   top: 92px;
   /* 优先落在正文左侧留白处，空间不足时贴左边距（此时默认收起，不会遮挡正文） */
-  left: max(12px, calc((100vw - 1080px) / 2 - 236px));
+  left: max(12px, calc((100vw - 1080px) / 2 - 264px));
   z-index: 90;
-  width: 224px;
+  width: 276px;
 }
 
 /* ===== 展开态 ===== */
@@ -228,48 +287,9 @@ onBeforeUnmount(() => {
   position: relative;
   margin: 0;
   padding: 6px;
-  list-style: none;
   overflow-y: auto;
   overscroll-behavior: contain;
   scrollbar-width: thin;
-}
-
-.toc-item a {
-  display: block;
-  padding: 6px 10px;
-  border-left: 2px solid transparent;
-  border-radius: 6px;
-  font-size: 13.5px;
-  line-height: 1.5;
-  color: var(--text-2);
-  transition: color 0.16s ease, background-color 0.16s ease, border-color 0.16s ease;
-}
-
-.toc-item.level-1 a {
-  font-weight: 600;
-  color: var(--text-1);
-}
-
-.toc-item.level-2 a {
-  padding-left: 16px;
-}
-
-.toc-item.level-3 a {
-  padding-left: 28px;
-  font-size: 13px;
-}
-
-.toc-item a:hover {
-  color: var(--brand-dark);
-  background: var(--brand-soft-2);
-}
-
-/* 当前阅读章节高亮 */
-.toc-item.active a {
-  color: var(--brand-dark);
-  background: var(--brand-soft-2);
-  border-left-color: var(--brand);
-  font-weight: 600;
 }
 
 /* ===== 收起态 ===== */
@@ -306,7 +326,7 @@ onBeforeUnmount(() => {
   }
 
   .toc-panel {
-    width: min(240px, 68vw);
+    width: min(260px, 70vw);
     max-height: 46vh;
   }
 }

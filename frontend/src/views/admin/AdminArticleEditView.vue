@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
+import { ElLoading, ElMessage, ElMessageBox, type FormInstance, type FormRules } from 'element-plus'
 import { MdEditor } from 'md-editor-v3'
 import 'md-editor-v3/lib/style.css'
 // 让编辑器预览用本地打包的 mermaid（默认会去 unpkg CDN 拉，国内常常拉不到）
@@ -12,6 +12,7 @@ import ImageUploader from '@/components/admin/ImageUploader.vue'
 import { validateImageFile } from '@/utils/upload'
 import { extractHeadings, type HeadingItem } from '@/utils/headings'
 import { checkArticle, checkImages, imageUrlsOf } from '@/utils/preflight'
+import { findLocalImages, fixSplitFences, pairFiles, replaceImages } from '@/utils/md-images'
 
 const props = defineProps<{ id?: string }>()
 
@@ -120,6 +121,65 @@ function insertHeadingLink(heading: HeadingItem) {
   ElMessage.success('已追加章节链接')
 }
 
+/** 选图 → 上传 OSS → 回填正文里的本地路径 */
+const imgInputRef = ref<HTMLInputElement | null>(null)
+const uploadingLocal = ref(false)
+
+function openImagePicker() {
+  imgInputRef.value?.click()
+}
+
+function onImageFilesChange(event: Event) {
+  const input = event.target as HTMLInputElement
+  const files = Array.from(input.files || [])
+  // 清空 value，连续选同一批文件也能再次触发
+  input.value = ''
+  if (files.length) void replaceLocalImages(files)
+}
+
+async function replaceLocalImages(files: File[]) {
+  const refs = findLocalImages(form.content)
+  if (!refs.length) {
+    ElMessage.info('正文里没有本地图片链接')
+    return
+  }
+  const { pairs, unmatchedRefs } = pairFiles(refs, files)
+  if (!pairs.length) {
+    ElMessage.error(`选中的 ${files.length} 张图，没一个对上正文里的文件名`)
+    return
+  }
+  uploadingLocal.value = true
+  const loading = ElLoading.service({
+    lock: true,
+    text: `正在上传 0/${pairs.length}…`,
+    background: 'rgba(255,255,255,.72)'
+  })
+  const mapping = new Map<string, string>()
+  let failed = 0
+  let done = 0
+  try {
+    for (const pair of pairs) {
+      try {
+        const result = await adminApi.upload(pair.file)
+        mapping.set(pair.ref.raw, result.url)
+      } catch {
+        failed += 1
+      }
+      done += 1
+      loading.setText(`正在上传 ${done}/${pairs.length}…`)
+    }
+    if (mapping.size) form.content = replaceImages(form.content, mapping)
+    const parts = [`已替换 ${mapping.size} 张`]
+    if (failed) parts.push(`失败 ${failed} 张`)
+    if (unmatchedRefs.length) parts.push(`还有 ${unmatchedRefs.length} 张没选到对应文件`)
+    if (failed || unmatchedRefs.length) ElMessage.warning(parts.join('，'))
+    else ElMessage.success(parts.join('，'))
+  } finally {
+    loading.close()
+    uploadingLocal.value = false
+  }
+}
+
 function formatSize(size: number): string {
   if (size < 1024) return `${size} B`
   if (size < 1024 * 1024) return `${(size / 1024).toFixed(1)} KB`
@@ -143,6 +203,20 @@ async function onFileChange(event: Event) {
   if (file) {
     await importMarkdownFile(file)
   }
+}
+
+function repairFences() {
+  const result = fixSplitFences(form.content)
+  if (!result.fixed) {
+    ElMessage.info('没有发现「语言名单独成行」的代码块')
+    return
+  }
+  form.content = result.content
+  const langs = [...new Set(result.langs)].slice(0, 5).join(' / ')
+  const parts: string[] = []
+  if (result.fixed) parts.push(`修复 ${result.fixed} 处代码块语言（${langs}）`)
+  if (result.placeholders) parts.push(`把 ${result.placeholders} 处「代码块」占位标成纯文本`)
+  ElMessage.success(`已${parts.join('，')}`)
 }
 
 async function importMarkdownFile(file: File) {
@@ -171,8 +245,30 @@ async function importMarkdownFile(file: File) {
       ElMessage.warning('文件内容为空，未导入')
       return
     }
-    form.content = text
-    ElMessage.success(`已导入「${file.name}」（${formatSize(file.size)}，${text.length} 字）`)
+    // 有些 md（网页/聊天窗口拼装而来）会把语言标记写到围栏上一行，导致整篇代码块都「没语言」
+    const fenceFix = fixSplitFences(text)
+    form.content = fenceFix.content
+    const fixParts: string[] = []
+    if (fenceFix.fixed) fixParts.push(`修复 ${fenceFix.fixed} 处代码块语言`)
+    if (fenceFix.placeholders) fixParts.push(`把 ${fenceFix.placeholders} 处「代码块」占位标成纯文本`)
+    const fixNote = fixParts.length ? `，已${fixParts.join('，')}` : ''
+    ElMessage.success(`已导入「${file.name}」（${formatSize(file.size)}，${text.length} 字）${fixNote}`)
+
+    // 导入的 md 里通常还有 ./img/xxx 这类本地图片，上线必 404 —— 顺手问一句要不要现在传
+    const localImages = findLocalImages(fenceFix.content)
+    if (localImages.length) {
+      try {
+        await ElMessageBox.confirm(
+          `正文里有 ${localImages.length} 张本地图片（例如 ${localImages[0].path}），` +
+            '站点上访问不到。现在选中这些图片上传到图床并替换链接吗？',
+          '处理本地图片',
+          { type: 'warning', confirmButtonText: '选图并上传', cancelButtonText: '以后再说' }
+        )
+        openImagePicker()
+      } catch {
+        // 用户选择以后再说
+      }
+    }
   } catch {
     ElMessage.error('读取文件失败，请重试')
   }
@@ -516,6 +612,17 @@ onBeforeUnmount(() => {
           <div ref="editorWrapRef" class="editor-wrap" :class="{ 'is-dragging': dragging }">
             <div class="editor-bar">
               <el-button size="small" :icon="'UploadFilled'" @click="openFilePicker">导入 Markdown 文件</el-button>
+              <el-button
+                size="small"
+                :icon="'PictureFilled'"
+                :loading="uploadingLocal"
+                @click="openImagePicker"
+              >
+                上传本地图片
+              </el-button>
+
+              <!-- 修「语言名单独成行」的代码块：导入后不放心可以再点一次 -->
+              <el-button size="small" :icon="'MagicStick'" @click="repairFences">修复代码块语言</el-button>
 
               <!-- 章节锚点：列出本文所有标题，点一下插入 [标题](#锚点) -->
               <el-popover
@@ -576,7 +683,18 @@ onBeforeUnmount(() => {
               class="file-input"
               type="file"
               :accept="MD_ACCEPT"
+              data-role="md-import"
               @change="onFileChange"
+            />
+
+            <input
+              ref="imgInputRef"
+              class="file-input"
+              data-role="md-images"
+              type="file"
+              accept="image/*"
+              multiple
+              @change="onImageFilesChange"
             />
           </div>
         </el-form-item>

@@ -41,6 +41,8 @@ const PROBE = `(() => {
     hasHero: !!hero,
     heroTop: heroRect ? Math.round(heroRect.top + window.scrollY) : -1,
     heroHeight: heroRect ? Math.round(heroRect.height) : 0,
+  heroWidth: heroRect ? Math.round(heroRect.width) : 0,
+    heroBorderBottomWidth: heroRect ? getComputedStyle(document.querySelector('.hero')).borderBottomWidth : 'n/a',
   hasLayers: !!document.querySelector('.hero-layers'),
     layerCount: document.querySelectorAll('.hero-layers .layer-stack .layer').length,
     layersLoaded: Array.from(document.querySelectorAll('.hero-layers .layer-stack .layer')).every((el) => el.complete && el.naturalWidth > 0),
@@ -127,7 +129,11 @@ const PROBE = `(() => {
     console.log('【需求 1】Hero 结构与背景图')
     check('存在 Hero 区块', light.hasHero)
     check('Hero 位于页面顶部', light.heroTop === 0, `top=${light.heroTop}`)
-    check('Hero 占满一屏（100vh ±40px）', Math.abs(light.heroHeight - light.vh) <= 40, light.heroHeight + 'px / 视口 ' + light.vh + 'px')
+    // 高度按原画 1920×873 比例（0.4547）计算，整幅画连底部桥架一起露出
+  const artRatio = light.heroHeight / light.heroWidth
+  check('Hero 高度贴合原画比例（0.4547 ±0.02）', Math.abs(artRatio - 0.4547) <= 0.02, artRatio.toFixed(4) + ' / ' + light.heroHeight + '×' + light.heroWidth + 'px')
+  // 直角分割：Hero 底边与内容之间没有分隔线
+  check('Hero 与内容之间无分隔线', light.heroBorderBottomWidth === '0px', String(light.heroBorderBottomWidth))
     check('Hero 使用分层背景（.hero-layers）', light.hasLayers === true)
     check('四层素材都在（base/mid/right/near）', light.layerCount === 4, String(light.layerCount))
     check('分层图已加载', light.layersLoaded === true)

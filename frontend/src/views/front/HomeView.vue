@@ -3,7 +3,7 @@ import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { onBeforeRouteLeave } from 'vue-router'
 import { useRoute, useRouter } from 'vue-router'
 import { publicApi } from '@/api'
-import type { Article, Category, Topic } from '@/types'
+import type { Article, Category, Tag, Topic } from '@/types'
 import { useSiteStore } from '@/stores/site'
 import { useSeo } from '@/composables/useSeo'
 import { useTheme } from '@/composables/useTheme'
@@ -36,9 +36,11 @@ async function submitSearch() {
   /* 搜索与分类/专题互斥：进入搜索态就退出它们 */
   activeCategory.value = null
   activeTopic.value = null
+  activeTag.value = null
   topicArticles.value = []
   menuOpen.value = false
   topicMenuOpen.value = false
+  tagMenuOpen.value = false
   page.value = 1
   await loadArticles()
   scrollToTop()
@@ -105,6 +107,11 @@ const activeTopic = ref<Topic | null>(null)
 const topicArticles = ref<Article[]>([])
 const topicMenuOpen = ref(false)
 
+/* ===== 标签下拉：与分类/专题同款，走 tagId 过滤 ===== */
+const tags = ref<Tag[]>([])
+const activeTag = ref<Tag | null>(null)
+const tagMenuOpen = ref(false)
+
 function findCategory(slug: unknown) {
   const key = typeof slug === 'string' ? slug : ''
   return key ? categories.value.find((c) => c.slug === key) ?? null : null
@@ -118,7 +125,9 @@ async function applyCategory(cat: Category | null) {
   activeKeyword.value = ''
   profileKeyword.value = ''
   activeTopic.value = null
+  activeTag.value = null
   topicArticles.value = []
+  tagMenuOpen.value = false
   page.value = 1
   await loadArticles()
   if (cat) scrollToTop()
@@ -129,6 +138,7 @@ async function applyCategory(cat: Category | null) {
   else delete query.category
   delete query.keyword
   delete query.topic
+  delete query.tag
   delete query.page
   router.replace({ path: '/', query })
 }
@@ -240,7 +250,9 @@ const normalArticles = computed(() => articles.value.filter((a) => !a.topped))
 /** 专题视图下去掉「置顶」标：专题是按时间策展的列表，置顶语义不适用 */
 const topicDisplayArticles = computed(() => topicArticles.value.map((a) => ({ ...a, topped: false })))
 /** 任何筛选生效时收起 Hero：短列表页不该还露着上一屏大图 */
-const isFiltered = computed(() => !!(activeCategory.value || activeKeyword.value || activeTopic.value))
+const isFiltered = computed(
+  () => !!(activeCategory.value || activeTag.value || activeKeyword.value || activeTopic.value)
+)
 /** 首帧不播收起动画（深链直接带 ?category= 时不该看到 Hero 闪一下） */
 const heroReady = ref(false)
 /** 正在恢复到「点击文章前的滚动位置」：这期间先别画，免得先露一帧错误位置 */
@@ -277,11 +289,12 @@ async function loadArticles() {
       pageNum: page.value,
       pageSize: PAGE_SIZE,
       ...(activeCategory.value ? { categoryId: activeCategory.value.id } : {}),
+      ...(activeTag.value ? { tagId: activeTag.value.id } : {}),
       ...(activeKeyword.value ? { keyword: activeKeyword.value } : {})
     })
     articles.value = result.records ?? result.list ?? []
     total.value = result.total ?? 0
-    if (!activeCategory.value && !activeKeyword.value) totalAll.value = total.value
+    if (!activeCategory.value && !activeTag.value && !activeKeyword.value) totalAll.value = total.value
   } catch {
     articles.value = []
     total.value = 0
@@ -304,7 +317,9 @@ async function applyTopic(topic: Topic | null) {
   activeCategory.value = null
   activeKeyword.value = ''
   profileKeyword.value = ''
+  activeTag.value = null
   menuOpen.value = false
+  tagMenuOpen.value = false
   page.value = 1
 
   if (topic) {
@@ -327,6 +342,7 @@ async function applyTopic(topic: Topic | null) {
   else delete query.topic
   delete query.category
   delete query.keyword
+  delete query.tag
   delete query.page
   router.replace({ path: '/', query })
 }
@@ -337,6 +353,45 @@ async function loadTopics() {
   } catch {
     topics.value = []
   }
+}
+
+function findTag(slug: unknown) {
+  const key = typeof slug === 'string' ? slug : ''
+  return key ? tags.value.find((t) => t.slug === key) ?? null : null
+}
+
+async function loadTags() {
+  try {
+    tags.value = await publicApi.tags()
+  } catch {
+    tags.value = []
+  }
+}
+
+/** 选中标签：与分类下拉同一套流程，只是参数换成 tagId */
+async function applyTag(tag: Tag | null) {
+  activeTag.value = tag
+  tagMenuOpen.value = false
+  /* 三个筛选条件互斥 */
+  activeCategory.value = null
+  activeKeyword.value = ''
+  profileKeyword.value = ''
+  activeTopic.value = null
+  topicArticles.value = []
+  menuOpen.value = false
+  page.value = 1
+  await loadArticles()
+  if (tag) scrollToTop()
+  else expandHeroKeepingFeed()
+
+  const query = { ...route.query }
+  if (tag) query.tag = tag.slug
+  else delete query.tag
+  delete query.category
+  delete query.keyword
+  delete query.topic
+  delete query.page
+  router.replace({ path: '/', query })
 }
 
 async function loadCategories() {
@@ -492,7 +547,9 @@ onMounted(async () => {
   })
   await loadCategories()
   await loadTopics()
+  await loadTags()
   activeCategory.value = findCategory(route.query.category)
+  activeTag.value = findTag(route.query.tag)
   /* ?page=2 直接打开 / 从详情返回时停在同一页 */
   const pageParam = Math.floor(Number(route.query.page))
   if (Number.isFinite(pageParam) && pageParam > 1) page.value = pageParam
@@ -550,6 +607,19 @@ watch(
   }
 )
 
+/** 浏览器前进/后退改变了 ?tag= 时同步过滤状态 */
+watch(
+  () => route.query.tag,
+  (slug) => {
+    if (route.path !== '/') return
+    const next = findTag(slug)
+    if ((next?.id ?? null) === (activeTag.value?.id ?? null)) return
+    activeTag.value = next
+    page.value = 1
+    loadArticles()
+  }
+)
+
 /** 浏览器前进/后退改变了 ?category= 时同步过滤状态 */
 watch(
   () => route.query.category,
@@ -598,7 +668,7 @@ watch(
       <!-- 导航移到内容区顶部（首屏留给整幅图） -->
       <SiteHeader />
       <div class="container home-grid">
-        <aside class="profile card">
+        <aside class="profile">
           <div class="profile-avatar">
             <img v-if="avatarUrl" :src="avatarUrl" :alt="authorName" />
             <span v-else class="avatar-fallback">{{ authorName.slice(0, 1) }}</span>
@@ -651,7 +721,8 @@ watch(
 
           <nav class="profile-nav">
             <router-link class="nav-item is-on" to="/">首页</router-link>
-            <router-link class="nav-item" to="/categories">分类 / 专题</router-link>
+            <router-link class="nav-item" to="/categories">分类</router-link>
+            <router-link class="nav-item" to="/topics">专题</router-link>
             <router-link class="nav-item" to="/about">关于</router-link>
           </nav>
 
@@ -691,7 +762,7 @@ watch(
 
           <template v-else>
             <!-- 置顶段：选了分类就整段收起，下面的列表自然上移补位 -->
-            <section v-if="!activeCategory && !activeKeyword && !activeTopic && shownPinned.length" class="feed-block">
+            <section v-if="!activeCategory && !activeTag && !activeKeyword && !activeTopic && shownPinned.length" class="feed-block">
               <div class="block-head">
                 <h2>置顶</h2>
                 <span class="block-count">{{ pinnedArticles.length }} 篇</span>
@@ -703,10 +774,11 @@ watch(
             </section>
 
             <!-- 列表段：默认「最新」，选中分类后变成该分类，工具条位置不动 -->
-            <section v-if="activeCategory || activeKeyword || activeTopic || normalArticles.length" class="feed-block">
+            <section v-if="activeCategory || activeTag || activeKeyword || activeTopic || normalArticles.length" class="feed-block">
               <div class="block-head">
                 <h2 v-if="activeKeyword">搜索：“{{ activeKeyword }}”</h2>
                 <h2 v-else-if="activeTopic">{{ activeTopic.name }}</h2>
+                <h2 v-else-if="activeTag">标签：{{ activeTag.name }}</h2>
                 <h2 v-else>{{ activeCategory ? activeCategory.name : '最新' }}</h2>
 
                 <div class="head-tools">
@@ -792,6 +864,47 @@ watch(
                     </div>
                   </div>
 
+                  <div v-if="!activeKeyword" class="cat-wrap">
+                    <button
+                      type="button"
+                      class="cat-btn"
+                      :class="{ 'is-open': tagMenuOpen }"
+                      :aria-expanded="tagMenuOpen"
+                      aria-haspopup="menu"
+                      @click="tagMenuOpen = !tagMenuOpen"
+                    >
+                      {{ activeTag ? '切换标签' : '标签' }}
+                      <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="m6 9 6 6 6-6" />
+                      </svg>
+                    </button>
+
+                    <div v-if="tagMenuOpen" class="cat-menu" role="menu">
+                      <button
+                        type="button"
+                        class="cat-item"
+                        :class="{ 'is-active': !activeTag }"
+                        role="menuitem"
+                        @click="applyTag(null)"
+                      >
+                        <span>全部标签</span>
+                        <span class="cat-num">{{ totalAll }}</span>
+                      </button>
+                      <button
+                        v-for="tag in tags"
+                        :key="tag.id"
+                        type="button"
+                        class="cat-item"
+                        :class="{ 'is-active': activeTag?.id === tag.id }"
+                        role="menuitem"
+                        @click="applyTag(tag)"
+                      >
+                        <span>#{{ tag.name }}</span>
+                        <span class="cat-num">{{ tag.articleCount ?? 0 }}</span>
+                      </button>
+                    </div>
+                  </div>
+
                   <span class="block-count">{{ activeTopic ? topicArticles.length : total }} 篇</span>
                   <button v-if="activeKeyword" type="button" class="clear-btn" @click="clearSearch">清除</button>
                 </div>
@@ -816,7 +929,7 @@ watch(
 
               <TimelineList
                 v-if="activeTopic ? topicArticles.length : true"
-                :articles="activeTopic ? topicDisplayArticles : activeCategory || activeKeyword ? articles : normalArticles"
+                :articles="activeTopic ? topicDisplayArticles : activeCategory || activeTag || activeKeyword ? articles : normalArticles"
                 :thumb-width="104"
                 compact
               />
@@ -838,9 +951,10 @@ watch(
   position: relative;
   display: flex;
   align-items: center;
-  /* 全屏 Hero：svh 让移动端地址栏收放时不跳动，老浏览器退回 vh */
-  height: 100vh;
-  height: 100svh;
+  /* Hero 高度按原图 1920×873 的比例算（58.4vw 换算为 0.4547），整幅画连底部桥架一起露出，不再上下裁切 */
+  /* 先用 vh 兜底，支持 min() 的浏览器按图片比例；超宽屏再被 84vh 收住 */
+  height: 58vh;
+  height: min(calc(100vw * 0.4547), 84vh);
   overflow: hidden;
   isolation: isolate;
 }
@@ -957,8 +1071,7 @@ watch(
 
 .home-grid {
   display: grid;
-  /* 文章在左、个人卡在右（用户要求把卡片挪到右手边） */
-  /* 个人卡列 260px：腾出 20px 给卡片，使卡片正好 +160px */
+  /* 文章在左、个人卡在右；列宽吃满，卡片宽度由 .stream 的右侧留白决定 */
   grid-template-columns: minmax(0, 1fr) 260px;
   gap: 22px;
   align-items: start;
@@ -985,25 +1098,26 @@ watch(
   grid-row: 1;
   margin-top: 62px;
   top: calc(var(--header-height, 62px) + 16px);
-  padding: 18px 16px 14px;
+  padding: 22px 18px 16px;
   text-align: center;
-  /* 和文章卡片同一套哑光浮起：同投影、同圆角，不另立一套 */
   background: var(--card-surface);
   border: 1px solid var(--card-edge);
-  border-radius: 14px;
+  border-radius: 18px;
   box-shadow: var(--card-shadow);
+  /* 卡片内统一一套黑体：思源黑体优先，缺失时回落系统黑体 */
+  font-family: 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
 }
 
 
 .profile-avatar {
-  width: 76px;
-  height: 76px;
-  margin: 0 auto 9px;
+  width: 88px;
+  height: 88px;
+  margin: 0 auto 10px;
   overflow: hidden;
   background: var(--surface-muted, rgba(15, 23, 42, 0.06));
-  border: 3px solid var(--surface-card);
+  border: 3px solid var(--card-surface);
   border-radius: 50%;
-  box-shadow: 0 6px 18px rgba(160, 120, 170, 0.26);
+  box-shadow: 0 8px 22px rgba(16, 24, 40, 0.14);
 }
 
 .profile-avatar img {
@@ -1026,13 +1140,13 @@ watch(
 
 .profile-name {
   margin: 0;
-  font-size: 14.5px;
-  font-weight: 700;
+  font-size: 17px;
+  font-weight: 600;
   color: var(--text-1);
 }
 
 .profile-bio {
-  margin: 5px 0 0;
+  margin: 6px 0 0;
   font-size: 11.5px;
   line-height: 1.7;
   color: var(--text-3);
@@ -1040,7 +1154,7 @@ watch(
 
 .profile-social {
   display: flex;
-  gap: 12px;
+  gap: 14px;
   justify-content: center;
   margin-top: 10px;
   color: var(--text-3);
@@ -1059,8 +1173,8 @@ watch(
 
 .profile-divider {
   height: 1px;
-  margin: 12px 0 10px;
-  background: var(--border-soft, rgba(15, 23, 42, 0.08));
+  margin: 15px 0;
+  background: var(--row-line);
 }
 
 /*
@@ -1101,41 +1215,65 @@ watch(
 .profile-nav {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+  margin-top: 0;
+  text-align: center;
 }
 
 .nav-item {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 7px 12px;
-  font-size: 12.5px;
+  display: block;
+  padding: 11px 12px;
+  font-size: 15px;
   font-weight: 600;
-  color: var(--text-1);
+  color: var(--row-title);
+  text-align: center;
   text-decoration: none;
-  background: var(--surface-muted, rgba(15, 23, 42, 0.04));
+  background: var(--nav-pill-bg);
   border-radius: 10px;
-  transition: background-color 0.18s ease;
+  transition: background-color 0.18s ease, color 0.18s ease;
 }
+
 
 .nav-item:hover {
-  background: var(--surface-muted-strong, rgba(15, 23, 42, 0.08));
+  background: var(--nav-pill-hover);
 }
 
-.nav-item.is-on {
-  background: var(--surface-muted-strong, rgba(15, 23, 42, 0.1));
+/* 当前页：实色底 + 白字 */
+.nav-item.is-on,
+.nav-item.is-on:hover {
+  color: #fff;
+  background: var(--brand);
+}
+
+/* 深色下 --brand 是亮蓝（#60a5fa），白字只有 2.1:1，改用深字 */
+html.dark .nav-item.is-on,
+html.dark .nav-item.is-on:hover {
+  color: #0b1220;
 }
 
 /* ---- 右侧文章流 ---- */
-/* 卡片右侧截断在 1148px（用户标注位置），与个人卡之间留出更大空隙 */
 .stream {
   display: flex;
   flex-direction: column;
   /* 卡片有了投影，间距放宽一点，阴影才不会互相压住 */
   gap: 16px;
   min-width: 0;
-  /* 卡片在 1148px 处截断：补 205px 右侧留白，个人卡位置不动 */
+  /* 卡片右边缘停在 1162px，与个人卡之间留出空隙 */
   padding-right: 205px;
+  position: relative;
+}
+
+/* 文章区与个人卡之间的分隔细线：距卡片 28px，从「置顶」那条横线的下沿开始 */
+.stream::after {
+  content: '';
+  position: absolute;
+  /* 34 = .block-head 的高度，线从那条横线开始，不越过它 */
+  top: 33px;
+  bottom: 0;
+  right: 177px;
+  width: 1px;
+  background: var(--row-line);
+  pointer-events: none;
 }
 /* 每段的小标题：置顶 / 最新 */
 .feed-block + .feed-block {
@@ -1364,12 +1502,18 @@ watch(
 
 /* ===================== 响应式 ===================== */
 @media (max-width: 960px) {
+  .stream::after {
+    display: none;
+  }
+
   .topic-overview {
     margin-left: 86px;
   }
 
   .hero {
-    min-height: 300px;
+    height: 68vh;
+    height: 68svh;
+    min-height: 380px;
   }
 
   .hero-content {
@@ -1392,18 +1536,13 @@ watch(
     grid-row: 2;
     margin-top: 0;
   }
-
-  /* 手机端取消卡片右侧的 205px 截断 */
-  .stream {
-    padding-right: 0;
-  }
 }
 
-/* 宽屏：个人卡左移贴住文章卡片（用户选 B），空隙 227px → 22px */
+/* 宽屏：个人卡左移贴住文章卡片，空隙 227px → 22px */
 @media (min-width: 961px) {
   .profile {
-    /* 与 .stream 的 205px 右侧留白等量反向补偿 */
-    margin-left: -205px;
+    /* 卡片 → 线 28px → 个人卡，留白给足 */
+    margin-left: -171px;
     /* 负 margin 会把格子撑宽，这里锁死宽度 */
     width: 260px;
     justify-self: start;
@@ -1416,6 +1555,10 @@ watch(
     padding-right: 0;
   }
 
+  .stream::after {
+    display: none;
+  }
+
   .profile {
     margin-left: 0;
     width: auto;
@@ -1426,6 +1569,10 @@ watch(
 
 /* ---- 个人卡内搜索：与列表页同一套「下划线」语言 ---- */
 .profile-search {
+  /* 与导航之间再来一条细线 */
+  margin-top: 13px;
+  padding: 10px 12px 0;
+  border-top: 1px solid var(--row-line);
   display: flex;
   gap: 8px;
   align-items: center;

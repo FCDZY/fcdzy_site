@@ -261,7 +261,8 @@ onMounted(load)
             <span class="error-count">
               {{ clientErrorCount > 0 ? `近 24 小时 ${clientErrorCount} 条` : '近 24 小时 0 条' }}
             </span>
-            <div v-if="clientErrorCount > 0" class="error-actions">
+            <!-- 有历史记录但都超过 24 小时时，按钮也要出来，否则清不掉 -->
+            <div v-if="clientErrorCount > 0 || clientErrors.length" class="error-actions">
               <el-button text size="small" @click="clearNoise">清理噪音</el-button>
               <el-button text type="danger" size="small" @click="clearClientErrors">清空</el-button>
             </div>

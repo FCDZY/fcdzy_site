@@ -205,6 +205,7 @@ watch(
 
 .list-wrap {
   /* 与首页完全同一套几何：内容左边缘 160、卡片 246–1162、竖线 224 */
+  /* 与首页同一套几何：左 144px 起排、卡片 916px */
   max-width: 1034px;
   margin-left: 144px;
   margin-right: auto;

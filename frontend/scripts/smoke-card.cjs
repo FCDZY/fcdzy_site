@@ -1,6 +1,6 @@
 /**
  * 首页文章行检查（编辑式列表）
- *  - 文字在左、缩略图固定 168px 在右（不再左右交替）
+ *  - 文字在左、缩略图固定 260px 在右（通栏、撑满卡片高度）
  *  - 无白底/无阴影/无圆角，靠 1px 细线分隔
  *  - 标题墨色、摘要 2 行 1.7 行高、元信息做「注脚」
  *  - 标签纯文字带 #，无封面保留占位槽
@@ -119,13 +119,13 @@ const PROBE = `(() => {
     await sleep(4200)
 
     const before = JSON.parse(await evaluate(PROBE))
-    console.log('【需求 1】列表结构：文字在左、缩略图固定 168px 在右')
+    console.log('【需求 1】列表结构：文字在左、缩略图固定 260px 在右')
     check('渲染出了文章行', before.cardCount > 0, `${before.cardCount} 行`)
     check('两列网格（文字 + 缩略图）', before.display === 'grid', before.display)
 check('缩略图 260 宽、撑满卡片高度', Math.abs(before.mediaWidth - 260) <= 2 && Math.abs(before.mediaHeight - before.coverCardHeight) <= 3, before.mediaWidth + 'x' + before.mediaHeight + ' / card ' + before.coverCardHeight)
   check('缩略图贴住卡片右边缘（通栏）', before.mediaFlushRight === true)
     check('缩略图始终在右（不再交替）', before.mediaOnRight === true)
-  check('有封面的卡片高 200', Math.abs(before.coverCardHeight - 200) <= 3, String(before.coverCardHeight))
+  check('有封面的卡片高 188', Math.abs(before.coverCardHeight - 188) <= 3, String(before.coverCardHeight))
     check('行高 120~240px', before.cardHeight >= 120 && before.cardHeight <= 240, `${before.cardHeight}px`)
     check('行是卡片：14px 圆角（哑光浮起）', before.radius === '14px', before.radius)
     check('行是卡片：白底（浅色）', before.bg === 'rgb(255, 255, 255)', before.bg)

@@ -151,11 +151,12 @@ const groups = computed<Group[]>(() => {
   gap: 2px;
 }
 
-/* 年.月：小号、拉开字距，像档案课上的日期戳 */
+/* 年.月：小号但必须看得清——11px + 浅灰对比度只有 2.9:1，加深到正文灰并提字重 */
 .tl-ym {
-  font-size: 11px;
-  letter-spacing: 0.08em;
-  color: var(--meta-faint);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--row-summary);
   font-variant-numeric: tabular-nums;
 }
 
@@ -196,8 +197,9 @@ const groups = computed<Group[]>(() => {
 }
 
 .timeline.is-compact .tl-ym {
-  font-size: 10px;
-  letter-spacing: 0.04em;
+  /* 紧凑模式日期列 64px，字号提到 11.5px 后正好放得下「2026.10」 */
+  font-size: 11.5px;
+  letter-spacing: 0.03em;
 }
 
 .timeline.is-compact .tl-body {
@@ -215,7 +217,8 @@ const groups = computed<Group[]>(() => {
   }
 
   .tl-node {
-    padding-right: 16px;
+    /* 年月提到 10.5px 后右内距收 4px，避免「2026.10」顶到屏幕左边缘 */
+    padding-right: 12px;
   }
 
   .tl-day {
@@ -223,8 +226,8 @@ const groups = computed<Group[]>(() => {
   }
 
   .tl-ym {
-    font-size: 9.5px;
-    letter-spacing: 0.04em;
+    font-size: 10.5px;
+    letter-spacing: 0.03em;
   }
 
   .tl-body {

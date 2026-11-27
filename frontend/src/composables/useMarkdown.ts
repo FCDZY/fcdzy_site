@@ -212,7 +212,8 @@ export function renderMarkdown(content?: string | null): RenderResult {
   const root = doc.getElementById('__root')
   const toc: TocItem[] = []
   if (root) {
-    const headings = Array.from(root.querySelectorAll('h1, h2, h3'))
+    // 取到 h6：中文长文常用 #### 做第四层，只取前三层目录会「看起来没有层级」
+    const headings = Array.from(root.querySelectorAll('h1, h2, h3, h4, h5, h6'))
     /** 同名标题按出现顺序追加 -2 / -3，保证 id 唯一且第一个不带后缀（可预测、可手写） */
     const used = new Map<string, number>()
     headings.forEach((heading, index) => {

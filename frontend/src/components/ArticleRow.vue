@@ -124,9 +124,9 @@ function open() {
   transition: background-color 0.18s ease, box-shadow 0.22s ease, transform 0.22s ease;
 }
 
-/* 有封面：卡片抬到 200 高，图撑满整条右边 */
+/* 有封面：卡片 188 高，图撑满整条右边 */
 .article-row.has-cover {
-  min-height: 200px;
+  min-height: 188px;
 }
 
 .article-row:hover {

@@ -38,12 +38,11 @@
 
   /* ===== 全局固定背景（挂在 body 上） ===== */
   /* 未配置背景图时的默认渐变，后台配置后由站点 store 覆盖为 url(...) */
-  /* 全站底色：淡淡的粉蓝渐变（首页/列表/关于统一，不再用图片当底） */
-  /* 中灰底（B 档）：比纯白稳、又保留轻盈感 */
+  /* 全站底色：冷灰 + 顶部一道极轻白光（首页/列表/关于统一，不再用图片当底） */
+  /* 去掉了粉/蓝径向光：彩底会让白卡像贴纸，也会和青蓝色的 Hero 打架 */
   --page-bg-image:
-    radial-gradient(900px 520px at 12% 0%, rgba(233, 220, 232, 0.8) 0%, transparent 60%),
-    radial-gradient(900px 620px at 96% 8%, rgba(214, 224, 242, 0.8) 0%, transparent 58%),
-    linear-gradient(160deg, #e3e6ee 0%, #dfe2eb 55%, #e6e3ea 100%);
+    radial-gradient(900px 500px at 50% 0%, rgba(244, 247, 251, 0.9) 0%, transparent 70%),
+    linear-gradient(180deg, #e9edf3 0%, #e6eaf1 100%);
   /*
    * 深色底：#182431 为基色，叠两层极淡的光
    *  - 顶部偏中位置一团冷白柔光（像屏幕后方的背光）
@@ -116,6 +115,12 @@
   --admin-aside-hover: rgba(255, 255, 255, 0.08);
 
   /* 文章卡片阴影 */
+  /* 顶栏搜索胶囊：内页在浅底上，原来的白色半透明几乎看不见 */
+  --hdr-search-bg: rgba(255, 255, 255, 0.72);
+  --hdr-search-bg-hover: #ffffff;
+  --hdr-search-line: rgba(16, 24, 40, 0.14);
+  --hdr-search-fg: #4b5563;
+  --hdr-search-hold: #9aa1ab;
   --card-shadow: 0 1px 2px rgba(16, 24, 40, 0.05), 0 1px 3px rgba(16, 24, 40, 0.04);
   --card-shadow-hover: 0 12px 28px rgba(16, 24, 40, 0.16), 0 4px 10px rgba(16, 24, 40, 0.1);
 }
@@ -176,6 +181,11 @@ html.dark {
   --admin-aside-bg: #12151b;
   --admin-aside-hover: rgba(255, 255, 255, 0.06);
 
+  --hdr-search-bg: rgba(255, 255, 255, 0.07);
+  --hdr-search-bg-hover: rgba(255, 255, 255, 0.12);
+  --hdr-search-line: rgba(255, 255, 255, 0.16);
+  --hdr-search-fg: #e5e7eb;
+  --hdr-search-hold: rgba(229, 231, 235, 0.55);
   --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.5), 0 1px 3px rgba(0, 0, 0, 0.4);
   --card-shadow-hover: 0 12px 28px rgba(0, 0, 0, 0.6), 0 4px 10px rgba(0, 0, 0, 0.45);
 
@@ -1009,7 +1019,6 @@ html.dark .admin-page .status--scheduled {
  * 深色主题统一在这里覆盖（组件内的 :global 选择器在 scoped 下不生效）。
  */
 html.dark .home .post,
-html.dark .home .profile,
 html.dark .home .side-card {
   background: rgba(22, 24, 31, 0.82);
   border-color: rgba(255, 255, 255, 0.12);
@@ -1028,9 +1037,14 @@ html.dark .home .card-media.is-empty {
 /* ==================== 首页（A 方案：渐变背景 + 纯白卡片） ==================== */
 
 /* 深色下卡片比底色 #1B2733 亮一档，保持同一色相（原来的 #1b1b24 偏紫，和板岩蓝打架） */
-html.dark .home .post,
-html.dark .home .profile {
+html.dark .home .post {
   background: #1f2c3a;
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* 个人卡回到卡片形态：深色下用比文章卡略亮一档的底色 */
+html.dark .home .profile {
+  background: #22303f;
   border-color: rgba(255, 255, 255, 0.08);
 }
 
@@ -1052,6 +1066,11 @@ html.dark .home .card-media.is-empty {
 :root {
   /* B 档底比 D 浅，线回到 12% 才看得清；文字保持加深后的色阶 */
   --row-line: rgba(0, 0, 0, 0.12);
+  /* 个人卡内部的细分隔线：比行线更深一档，去框后靠它撑住结构 */
+  --profile-line: rgba(16, 24, 40, 0.2);
+  /* 个人卡导航胶囊 */
+  --nav-pill-bg: rgba(16, 24, 40, 0.055);
+  --nav-pill-hover: rgba(16, 24, 40, 0.1);
   --row-hover: rgba(0, 0, 0, 0.03);
   --row-title: #111111;
   /* 工具条小字：实心近黑 + 极轻投影，替代原来的灰字 */
@@ -1064,6 +1083,9 @@ html.dark .home .card-media.is-empty {
 
 html.dark {
   --row-line: rgba(255, 255, 255, 0.08);
+  --profile-line: rgba(255, 255, 255, 0.16);
+  --nav-pill-bg: rgba(255, 255, 255, 0.07);
+  --nav-pill-hover: rgba(255, 255, 255, 0.13);
   --row-hover: rgba(255, 255, 255, 0.03);
   --row-title: #ededed;
   --ui-strong: #e9edf3;

@@ -1,3 +1,4 @@
+import MarkdownIt from 'markdown-it'
 import { looseAnchor, normalizeAnchor } from './anchor'
 import { extractHeadings } from './headings'
 
@@ -12,11 +13,9 @@ export interface PreflightIssue {
   text: string
 }
 
-const FENCE = /```[\s\S]*?```|~~~[\s\S]*?~~~/g
 const HEADING_LINE = /^(#{1,6})\s+(.+?)\s*$/gm
 const ANCHOR_LINK = /\]\(\s*#([^)\s]+)\s*\)/g
 const EMPTY_LINK = /\[[^\]]*\]\(\s*\)/g
-/** 只匹配「围栏后没有语言标记」的行 */
 
 /** 锚点能否对上某个标题（和前台渲染同一套归一化 + 宽松匹配） */
 function anchorMatches(anchor: string, headingIds: string[]): boolean {
@@ -41,6 +40,9 @@ export function checkArticle(content?: string | null): PreflightIssue[] {
     return [{ level: 'error', text: '正文是空的' }]
   }
 
+  // 用 markdown-it 解析一遍：围栏与标题的判定交给真正的解析器，
+  // 自己用正则逐行 toggle 会在「四反引号包住三反引号」这类文件上错位（曾把 166 个块全判成没语言）
+  const tokens = new MarkdownIt().parse(source, {})
   const headings = extractHeadings(source)
 
   // ① 失效锚点
@@ -56,7 +58,7 @@ export function checkArticle(content?: string | null): PreflightIssue[] {
   }
 
   // ② 标题层级跳级（h1 → h3）
-  const levels = Array.from(source.replace(FENCE, '').matchAll(HEADING_LINE)).map((m) => m[1].length)
+  const levels = tokens.filter((t) => t.type === 'heading_open').map((t) => Number(t.tag.slice(1)))
   for (let i = 1; i < levels.length; i += 1) {
     if (levels[i] - levels[i - 1] > 1) {
       issues.push({ level: 'warn', text: `标题层级跳级：从 h${levels[i - 1]} 直接到 h${levels[i]}` })
@@ -64,21 +66,16 @@ export function checkArticle(content?: string | null): PreflightIssue[] {
     }
   }
 
-  // ③ 代码块没写语言（不高亮）——只数「开始围栏」，结束围栏不算
-  let insideFence = false
-  let noLangFences = 0
-  for (const line of source.split(/\r?\n/)) {
-    const matched = /^\s*(`{3,}|~{3,})\s*(.*)$/.exec(line)
-    if (!matched) continue
-    if (!insideFence) {
-      insideFence = true
-      if (!matched[2].trim()) noLangFences += 1
-    } else {
-      insideFence = false
-    }
-  }
-  if (noLangFences > 0) {
-    issues.push({ level: 'warn', text: `有 ${noLangFences} 个代码块没写语言标记（不会语法高亮，例如 \`\`\`java）` })
+  // ③ 代码块没写语言（不高亮）——只数围栏块（fence），四空格缩进的老式代码块不参与
+  const noLangLines = tokens
+    .filter((t) => t.type === 'fence' && !String(t.info || '').trim())
+    .map((t) => (t.map?.[0] ?? 0) + 1)
+  if (noLangLines.length > 0) {
+    const where = noLangLines.slice(0, 3).join('、') + (noLangLines.length > 3 ? ' 等' : '')
+    issues.push({
+      level: 'warn',
+      text: `有 ${noLangLines.length} 个代码块没写语言标记（第 ${where} 行起；不会语法高亮）`
+    })
   }
 
   // ④ 空链接
